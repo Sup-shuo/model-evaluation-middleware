@@ -1,0 +1,31 @@
+{
+  "$id": "local_files.user_parameters.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "files": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "integrity_policy": {
+      "default": "basic",
+      "enum": [
+        "basic",
+        "strict"
+      ]
+    },
+    "root": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "root",
+    "files"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,11 @@
+schema_version: "1.0"
+id: hellaswag
+dataset:
+  provider: virtual
+  revision: lm-eval-pinned-by-framework-profile
+protocol:
+  task: hellaswag
+  split: validation
+  fewshot: 0
+  inference: [multiple_choice]
+metrics: [accuracy]

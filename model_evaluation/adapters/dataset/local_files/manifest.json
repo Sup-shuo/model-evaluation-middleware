@@ -1,0 +1,22 @@
+{
+  "adapter_api": "1.0",
+  "implementation": {
+    "language": "python"
+  },
+  "kind": "dataset",
+  "name": "local_files",
+  "operations": [
+    "resolve",
+    "prepare",
+    "verify",
+    "snapshot"
+  ],
+  "schema_versions": {
+    "dataset_artifact": "1.0"
+  },
+  "user_config": {
+    "parameters_schema": "user_parameters.schema.json",
+    "schema_version": "1.0"
+  },
+  "version": "1.2.1"
+}

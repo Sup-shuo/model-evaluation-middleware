@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "canonical_result.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "model",
+    "benchmark",
+    "framework",
+    "metrics",
+    "raw_result"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "run_id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "model": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "benchmark": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "framework": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "metrics": {
+      "$ref": "#/$defs/metricMap"
+    },
+    "raw_result": {
+      "$ref": "common.schema.json#/$defs/artifactRef"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "breakdowns": {
+      "$ref": "#/$defs/breakdowns"
+    },
+    "sample_artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sampleArtifact"
+      }
+    }
+  },
+  "$defs": {
+    "metricEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value"
+      ],
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "integer",
+            "string",
+            "boolean",
+            "null"
+          ]
+        },
+        "higher_is_better": {
+          "type": "boolean"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "stderr": {
+          "type": "number"
+        }
+      }
+    },
+    "metricMap": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/metricEntry"
+      }
+    },
+    "sampleCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "original": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "effective": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "minProperties": 1
+    },
+    "breakdownDetail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metrics"
+      ],
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "metrics": {
+          "$ref": "#/$defs/metricMap"
+        },
+        "canonical_metrics": {
+          "$ref": "#/$defs/metricMap"
+        },
+        "sample_count": {
+          "$ref": "#/$defs/sampleCount"
+        },
+        "num_fewshot": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "version": {
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "subtasks": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "summaryBreakdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "metric_namespace",
+        "metrics"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "group",
+            "task"
+          ]
+        },
+        "metric_namespace": {
+          "enum": [
+            "canonical",
+            "framework_native"
+          ]
+        },
+        "metrics": {
+          "$ref": "#/$defs/metricMap"
+        },
+        "native_metrics": {
+          "$ref": "#/$defs/metricMap"
+        }
+      }
+    },
+    "breakdowns": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "summary",
+        "groups",
+        "tasks"
+      ],
+      "properties": {
+        "summary": {
+          "$ref": "#/$defs/summaryBreakdown"
+        },
+        "groups": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/breakdownDetail"
+          }
+        },
+        "tasks": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/breakdownDetail"
+          }
+        }
+      }
+    },
+    "sampleArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "media_type"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

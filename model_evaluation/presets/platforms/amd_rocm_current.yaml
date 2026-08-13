@@ -1,0 +1,14 @@
+schema_version: '1.1'
+id: amd_rocm_current
+device:
+  adapter: amd
+  devices:
+  - '0'
+runtime:
+  adapter: rocm
+backend_environment:
+  provider: current
+  profile: current
+evaluation_environment:
+  provider: current
+  profile: current

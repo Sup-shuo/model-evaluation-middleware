@@ -1,0 +1,21 @@
+schema_version: '1.1'
+id: vllm_template_example
+backend:
+  adapter: vllm
+management:
+  mode: managed
+model_location:
+  root: /models
+  path_template: '{model.source.ref}'
+parameters:
+  port: 8091
+  max_model_len: 4096
+  tensor_parallel_size: 1
+  gpu_memory_utilization: 0.8
+  max_num_seqs: 16
+  num_concurrent: 16
+  ready_timeout_seconds: 900
+compatibility:
+  runtime_families:
+  - cuda
+  - neuware

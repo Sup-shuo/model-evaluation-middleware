@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "preflight_report.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "probes"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed"
+      ]
+    },
+    "probes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "phase",
+          "required",
+          "status",
+          "duration_ms"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "phase": {
+            "enum": [
+              "backend_dependency",
+              "model_compatibility"
+            ]
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "passed",
+              "failed",
+              "blocked"
+            ]
+          },
+          "duration_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "returncode": {
+            "type": "integer"
+          },
+          "argv": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "wrapped_argv": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          },
+          "result": {
+            "$ref": "preflight_probe_result.schema.json"
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "environment": {
+      "type": "string"
+    },
+    "executable_root": {
+      "type": "string"
+    }
+  }
+}

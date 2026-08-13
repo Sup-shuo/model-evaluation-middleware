@@ -1,0 +1,19 @@
+{
+  "adapter_api": "1.0",
+  "implementation": {
+    "language": "python",
+    "purpose": "protocol-reference-only"
+  },
+  "kind": "binding",
+  "name": "reference_eval",
+  "operations": [
+    "requirements",
+    "build_task",
+    "protocol_fingerprint"
+  ],
+  "schema_versions": {
+    "framework_task_artifact": "1.0",
+    "requirement_set": "1.0"
+  },
+  "version": "1.0.0"
+}

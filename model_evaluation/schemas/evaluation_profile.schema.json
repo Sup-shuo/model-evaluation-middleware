@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "evaluation_profile.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "framework",
+    "binding"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.1"
+    },
+    "id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "framework": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adapter"
+      ],
+      "properties": {
+        "adapter": {
+          "$ref": "common.schema.json#/$defs/id"
+        }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "middleware": {
+          "type": "object",
+          "additionalProperties": true,
+          "not": {
+            "required": [
+              "parameter_templates"
+            ]
+          }
+        }
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adapter"
+      ],
+      "properties": {
+        "adapter": {
+          "$ref": "common.schema.json#/$defs/id"
+        }
+      }
+    }
+  }
+}

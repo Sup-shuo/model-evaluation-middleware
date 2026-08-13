@@ -1,0 +1,13 @@
+schema_version: "1.0"
+id: qwen_suite_example
+models: [qwen_example]
+platforms: [nvidia_cuda_current]
+deployments: [vllm_template_example]
+benchmarks: [mmlu, hellaswag]
+evaluations: [lm_eval_current]
+overrides:
+  offline: true
+execution:
+  mode: serial
+  continue_on_error: false
+  max_runs: 100

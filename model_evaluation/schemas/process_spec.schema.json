@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "process_spec.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "argv"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "argv": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "cwd": {
+      "type": "string"
+    },
+    "env_patch": {
+      "$ref": "env_patch.schema.json"
+    },
+    "stdin": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "inherit",
+            "null",
+            "file"
+          ]
+        },
+        "path": {
+          "type": "string"
+        }
+      }
+    },
+    "stdout": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "inherit",
+            "capture",
+            "file"
+          ]
+        },
+        "path": {
+          "type": "string"
+        }
+      }
+    },
+    "stderr": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "inherit",
+            "capture",
+            "file",
+            "merge_stdout"
+          ]
+        },
+        "path": {
+          "type": "string"
+        }
+      }
+    },
+    "timeout_seconds": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "secret_env": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "common.schema.json#/$defs/secretRef"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

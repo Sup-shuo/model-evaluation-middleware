@@ -1,0 +1,18 @@
+{
+  "adapter_api": "1.0",
+  "implementation": {
+    "language": "python"
+  },
+  "kind": "dataset",
+  "name": "virtual",
+  "operations": [
+    "resolve",
+    "prepare",
+    "verify",
+    "snapshot"
+  ],
+  "schema_versions": {
+    "dataset_artifact": "1.0"
+  },
+  "version": "1.0.1"
+}

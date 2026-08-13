@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "backend_preflight_plan.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "probes"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "probes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "phase",
+          "required",
+          "result_format",
+          "process"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+          },
+          "phase": {
+            "enum": [
+              "backend_dependency",
+              "model_compatibility"
+            ]
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "result_format": {
+            "enum": [
+              "text",
+              "preflight_result"
+            ]
+          },
+          "process": {
+            "$ref": "process_spec.schema.json"
+          }
+        }
+      }
+    }
+  }
+}

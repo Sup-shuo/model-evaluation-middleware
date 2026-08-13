@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "user_evaluation.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "models",
+    "benchmarks"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.2"
+    },
+    "model_catalog": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hardware": {"type": "string", "minLength": 1},
+        "backend": {"type": "string", "minLength": 1},
+        "evaluator": {"type": "string", "minLength": 1}
+      }
+    },
+    "models": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          {"type": "string", "minLength": 1},
+          {"$ref": "#/$defs/catalogReference"},
+          {"$ref": "#/$defs/inlineModel"}
+        ]
+      }
+    },
+    "benchmarks": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "devices": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "oneOf": [
+              {"type": "string"},
+              {"type": "integer", "minimum": 0}
+            ]
+          }
+        }
+      }
+    },
+    "backend": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {"type": "object"}
+      ]
+    },
+    "evaluator": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {"type": "object"}
+      ]
+    },
+    "offline": {"type": "boolean"},
+    "dataset_timeout_seconds": {"type": "number", "exclusiveMinimum": 0},
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {"const": "serial"},
+        "continue_on_error": {"type": "boolean"},
+        "max_runs": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "max_combinations": {"type": "integer", "minimum": 1, "maximum": 1000000}
+      }
+    },
+    "tags": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string"}
+    },
+    "environments": {"$ref": "#/$defs/environments"}
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ref"],
+      "properties": {
+        "type": {"enum": ["hf", "local", "registry", "other"]},
+        "ref": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1}
+      }
+    },
+    "modelFields": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "label": {"type": "string", "minLength": 1},
+        "source": {"$ref": "#/$defs/source"},
+        "ref": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "source_type": {"enum": ["hf", "local", "registry", "other"]},
+        "revision": {"type": "string"},
+        "architecture": {"type": "string", "minLength": 1},
+        "quantization": {"type": "string", "minLength": 1},
+        "format": {"type": "string", "minLength": 1},
+        "context_length": {"type": "integer", "minimum": 1},
+        "tokenizer": {
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {"type": "object", "minProperties": 1, "additionalProperties": true}
+          ]
+        },
+        "chat_template": {"type": "string", "minLength": 1},
+        "trust_remote_code": {"type": "boolean"},
+        "model_location": {"type": "object", "minProperties": 1},
+        "backend": {"type": "object"},
+        "backends": {"$ref": "#/$defs/backends"},
+        "environments": {"$ref": "#/$defs/environments"},
+        "provenance": {"type": "object"},
+        "metadata": {"type": "object"}
+      },
+      "not": {"required": ["backend", "backends"]}
+    },
+    "modelOverrides": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "context_length": {"type": "integer", "minimum": 1},
+        "tokenizer": {
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {"type": "object", "minProperties": 1, "additionalProperties": true}
+          ]
+        },
+        "chat_template": {"type": "string", "minLength": 1},
+        "trust_remote_code": {"type": "boolean"},
+        "model_location": {"type": "object", "minProperties": 1},
+        "backend": {"type": "object"},
+        "backends": {"$ref": "#/$defs/backends"},
+        "environments": {"$ref": "#/$defs/environments"}
+      },
+      "not": {"required": ["backend", "backends"]}
+    },
+    "catalogReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "overrides": {"$ref": "#/$defs/modelOverrides"}
+      }
+    },
+    "inlineModel": {
+      "allOf": [
+        {"$ref": "#/$defs/modelFields"},
+        {
+          "type": "object",
+          "properties": {"id": {"type": "string", "minLength": 1}},
+          "anyOf": [
+            {"required": ["ref"]},
+            {"required": ["name"]},
+            {"required": ["source"]}
+          ]
+        }
+      ]
+    },
+    "environment": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": {"type": "string", "minLength": 1},
+            "profile": {"type": "string", "minLength": 1},
+            "name": {"type": "string", "minLength": 1},
+            "executable": {"type": "string", "minLength": 1},
+            "parameters": {"type": "object"}
+          },
+          "not": {"required": ["profile", "name"]}
+        }
+      ]
+    },
+    "environments": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "backend": {"$ref": "#/$defs/environment"},
+        "evaluator": {"$ref": "#/$defs/environment"}
+      }
+    },
+    "backends": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"type": "string", "minLength": 1},
+      "additionalProperties": {"type": "object"}
+    }
+  }
+}

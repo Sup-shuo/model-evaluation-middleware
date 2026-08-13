@@ -1,0 +1,23 @@
+{
+  "$id": "bbh_local.user_parameters.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "download_retries": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "download_timeout_seconds": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    },
+    "integrity_policy": {
+      "default": "basic",
+      "enum": [
+        "basic",
+        "strict"
+      ]
+    }
+  },
+  "type": "object"
+}

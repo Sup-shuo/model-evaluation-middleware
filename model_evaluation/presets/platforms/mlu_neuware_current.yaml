@@ -1,0 +1,14 @@
+schema_version: '1.1'
+id: mlu_neuware_current
+device:
+  adapter: mlu
+  devices:
+  - '0'
+runtime:
+  adapter: neuware
+backend_environment:
+  provider: current
+  profile: current
+evaluation_environment:
+  provider: current
+  profile: current

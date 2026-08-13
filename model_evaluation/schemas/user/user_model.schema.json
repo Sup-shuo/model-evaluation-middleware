@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "user_model.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "source"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "architecture": {
+      "type": "string",
+      "minLength": 1
+    },
+    "quantization": {
+      "type": "string",
+      "minLength": 1
+    },
+    "format": {
+      "type": "string",
+      "minLength": 1
+    },
+    "context_length": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "tokenizer": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": true
+        }
+      ]
+    },
+    "chat_template": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trust_remote_code": {
+      "type": "boolean"
+    },
+    "model_location": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": true
+    },
+    "backend": {
+      "type": "object"
+    },
+    "backends": {
+      "$ref": "#/$defs/backends"
+    },
+    "environments": {
+      "$ref": "#/$defs/environments"
+    },
+    "provenance": {
+      "type": "object"
+    },
+    "metadata": {
+      "type": "object"
+    }
+  },
+  "not": {
+    "required": [
+      "backend",
+      "backends"
+    ]
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "ref"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "hf",
+            "local",
+            "registry",
+            "other"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "environment": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "minLength": 1
+            },
+            "profile": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "executable": {
+              "type": "string",
+              "minLength": 1
+            },
+            "parameters": {
+              "type": "object"
+            }
+          },
+          "not": {
+            "required": [
+              "profile",
+              "name"
+            ]
+          }
+        }
+      ]
+    },
+    "environments": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "$ref": "#/$defs/environment"
+        },
+        "evaluator": {
+          "$ref": "#/$defs/environment"
+        }
+      }
+    },
+    "backends": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "object"
+      }
+    }
+  }
+}

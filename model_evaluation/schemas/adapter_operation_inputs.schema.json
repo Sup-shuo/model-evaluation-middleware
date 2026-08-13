@@ -1,0 +1,625 @@
+{
+  "$defs": {
+    "backend_plan_preflight": {
+      "additionalProperties": false,
+      "properties": {
+        "deployment": {
+          "$ref": "deployment_profile.schema.json"
+        },
+        "model": {
+          "$ref": "model_spec.schema.json"
+        },
+        "network_policy": {
+          "enum": [
+            "online",
+            "offline"
+          ]
+        },
+        "platform": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      "required": [
+        "model",
+        "deployment",
+        "platform",
+        "network_policy"
+      ],
+      "type": "object"
+    },
+    "backend_plan_start": {
+      "additionalProperties": false,
+      "properties": {
+        "deployment": {
+          "$ref": "deployment_profile.schema.json"
+        },
+        "endpoint": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "log_path": {
+          "type": "string"
+        },
+        "model": {
+          "$ref": "model_spec.schema.json"
+        },
+        "network_policy": {
+          "enum": [
+            "online",
+            "offline"
+          ]
+        },
+        "platform": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      "required": [
+        "model",
+        "deployment",
+        "platform",
+        "endpoint",
+        "log_path",
+        "network_policy"
+      ],
+      "type": "object"
+    },
+    "backend_probe_service": {
+      "additionalProperties": false,
+      "properties": {
+        "attach": {
+          "additionalProperties": true,
+          "properties": {
+            "auth": {
+              "additionalProperties": false,
+              "properties": {
+                "metadata": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "mode": {
+                  "enum": [
+                    "none",
+                    "bearer",
+                    "custom"
+                  ]
+                },
+                "secret_ref": {
+                  "$ref": "common.schema.json#/$defs/secretRef"
+                }
+              },
+              "required": [
+                "mode"
+              ],
+              "type": "object"
+            },
+            "base_url": {
+              "format": "uri",
+              "type": "string"
+            },
+            "context_length": {
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "declared_capabilities": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "detokenize_url": {
+              "format": "uri",
+              "type": "string"
+            },
+            "model_id": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "num_concurrent": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "ownership": {
+              "enum": [
+                "managed",
+                "attached",
+                "external"
+              ]
+            },
+            "tokenize_url": {
+              "format": "uri",
+              "type": "string"
+            },
+            "tokenizer_info_url": {
+              "format": "uri",
+              "type": "string"
+            },
+            "tokenizer_path": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "base_url",
+            "model_id",
+            "ownership",
+            "auth"
+          ],
+          "type": "object"
+        },
+        "auth_value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attach"
+      ],
+      "type": "object"
+    },
+    "backend_requirements": {
+      "additionalProperties": false,
+      "properties": {
+        "deployment": {
+          "$ref": "deployment_profile.schema.json"
+        },
+        "model": {
+          "$ref": "model_spec.schema.json"
+        }
+      },
+      "required": [
+        "model",
+        "deployment"
+      ],
+      "type": "object"
+    },
+    "backend_snapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "deployment": {
+          "$ref": "deployment_profile.schema.json"
+        },
+        "service": {
+          "$ref": "service_descriptor.schema.json"
+        }
+      },
+      "required": [
+        "deployment",
+        "service"
+      ],
+      "type": "object"
+    },
+    "binding_build_task": {
+      "additionalProperties": false,
+      "properties": {
+        "benchmark": {
+          "$ref": "benchmark_spec.schema.json"
+        },
+        "dataset_artifact": {
+          "$ref": "dataset_artifact.schema.json"
+        },
+        "evaluation": {
+          "$ref": "evaluation_profile.schema.json"
+        },
+        "staging_root": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "benchmark",
+        "dataset_artifact",
+        "evaluation"
+      ],
+      "type": "object"
+    },
+    "binding_protocol_fingerprint": {
+      "additionalProperties": false,
+      "properties": {
+        "benchmark": {
+          "$ref": "benchmark_spec.schema.json"
+        },
+        "dataset_artifact": {
+          "$ref": "dataset_artifact.schema.json"
+        },
+        "evaluation": {
+          "$ref": "evaluation_profile.schema.json"
+        }
+      },
+      "required": [
+        "benchmark",
+        "dataset_artifact",
+        "evaluation"
+      ],
+      "type": "object"
+    },
+    "binding_requirements": {
+      "additionalProperties": false,
+      "properties": {
+        "benchmark": {
+          "$ref": "benchmark_spec.schema.json"
+        }
+      },
+      "required": [
+        "benchmark"
+      ],
+      "type": "object"
+    },
+    "dataset_prepare": {
+      "additionalProperties": false,
+      "properties": {
+        "benchmark": {
+          "$ref": "benchmark_spec.schema.json"
+        },
+        "cache_root": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "benchmark",
+        "cache_root"
+      ],
+      "type": "object"
+    },
+    "dataset_resolve": {
+      "additionalProperties": false,
+      "properties": {
+        "benchmark": {
+          "$ref": "benchmark_spec.schema.json"
+        }
+      },
+      "required": [
+        "benchmark"
+      ],
+      "type": "object"
+    },
+    "dataset_snapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "$ref": "dataset_artifact.schema.json"
+        },
+        "benchmark": {
+          "$ref": "benchmark_spec.schema.json"
+        }
+      },
+      "required": [
+        "artifact",
+        "benchmark"
+      ],
+      "type": "object"
+    },
+    "dataset_verify": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "$ref": "dataset_artifact.schema.json"
+        },
+        "benchmark": {
+          "$ref": "benchmark_spec.schema.json"
+        }
+      },
+      "required": [
+        "artifact",
+        "benchmark"
+      ],
+      "type": "object"
+    },
+    "device_probe": {
+      "additionalProperties": false,
+      "properties": {
+        "parameters": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "requested_devices": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "requested_devices",
+        "parameters"
+      ],
+      "type": "object"
+    },
+    "device_snapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "parameters": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "requested_devices": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "requested_devices",
+        "parameters"
+      ],
+      "type": "object"
+    },
+    "device_visibility": {
+      "additionalProperties": false,
+      "properties": {
+        "descriptor": {
+          "$ref": "device_descriptor.schema.json"
+        },
+        "devices": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      "required": [
+        "devices",
+        "descriptor",
+        "parameters"
+      ],
+      "type": "object"
+    },
+    "environment_resolve": {
+      "additionalProperties": false,
+      "properties": {
+        "parameters": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "profile": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "profile",
+        "parameters"
+      ],
+      "type": "object"
+    },
+    "environment_snapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "parameters": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "profile": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "profile",
+        "parameters"
+      ],
+      "type": "object"
+    },
+    "environment_wrap_process": {
+      "additionalProperties": false,
+      "properties": {
+        "environment": {
+          "$ref": "environment_descriptor.schema.json"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "process": {
+          "$ref": "process_spec.schema.json"
+        }
+      },
+      "required": [
+        "process",
+        "environment",
+        "parameters"
+      ],
+      "type": "object"
+    },
+    "evaluator_normalize": {
+      "additionalProperties": false,
+      "properties": {
+        "raw_result_root": {
+          "type": "string"
+        },
+        "run_metadata": {
+          "additionalProperties": false,
+          "properties": {
+            "benchmark": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "run_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "run_id",
+            "model",
+            "benchmark"
+          ],
+          "type": "object"
+        },
+        "task": {
+          "$ref": "framework_task_artifact.schema.json"
+        }
+      },
+      "required": [
+        "raw_result_root",
+        "task",
+        "run_metadata"
+      ],
+      "type": "object"
+    },
+    "evaluator_plan_evaluate": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_root": {
+          "type": "string"
+        },
+        "evaluation": {
+          "$ref": "evaluation_profile.schema.json"
+        },
+        "log_path": {
+          "type": "string"
+        },
+        "network_policy": {
+          "enum": [
+            "online",
+            "offline"
+          ]
+        },
+        "output_root": {
+          "type": "string"
+        },
+        "service": {
+          "$ref": "service_descriptor.schema.json"
+        },
+        "task": {
+          "$ref": "framework_task_artifact.schema.json"
+        },
+        "workspace": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "service",
+        "task",
+        "evaluation",
+        "output_root",
+        "workspace",
+        "log_path",
+        "network_policy"
+      ],
+      "type": "object"
+    },
+    "evaluator_plan_preflight": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_root": {
+          "type": "string"
+        },
+        "evaluation": {
+          "$ref": "evaluation_profile.schema.json"
+        },
+        "task": {
+          "$ref": "framework_task_artifact.schema.json"
+        }
+      },
+      "required": [
+        "evaluation"
+      ],
+      "type": "object"
+    },
+    "evaluator_requirements": {
+      "additionalProperties": false,
+      "properties": {
+        "evaluation": {
+          "$ref": "evaluation_profile.schema.json"
+        },
+        "task": {
+          "$ref": "framework_task_artifact.schema.json"
+        }
+      },
+      "required": [
+        "evaluation",
+        "task"
+      ],
+      "type": "object"
+    },
+    "evaluator_snapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "evaluation": {
+          "$ref": "evaluation_profile.schema.json"
+        },
+        "task": {
+          "$ref": "framework_task_artifact.schema.json"
+        }
+      },
+      "required": [
+        "evaluation"
+      ],
+      "type": "object"
+    },
+    "runtime_probe": {
+      "additionalProperties": false,
+      "properties": {
+        "parameters": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "profile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "profile",
+        "parameters"
+      ],
+      "type": "object"
+    },
+    "runtime_resolve_environment": {
+      "additionalProperties": false,
+      "properties": {
+        "descriptor": {
+          "$ref": "runtime_descriptor.schema.json"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "profile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "descriptor",
+        "profile",
+        "parameters"
+      ],
+      "type": "object"
+    },
+    "runtime_snapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "parameters": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "profile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "profile",
+        "parameters"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "adapter_operation_inputs.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object"
+}

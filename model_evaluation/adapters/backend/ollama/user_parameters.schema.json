@@ -1,0 +1,45 @@
+{
+  "$id": "ollama.user_parameters.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "api_model_name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "context_length": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "cwd": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "executable": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "model_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "num_concurrent": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "port": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "ready_timeout_seconds": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    },
+    "shutdown_timeout_seconds": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    }
+  },
+  "type": "object"
+}

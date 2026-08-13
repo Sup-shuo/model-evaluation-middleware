@@ -1,0 +1,23 @@
+{
+  "adapter_api": "1.0",
+  "implementation": {
+    "language": "python"
+  },
+  "kind": "environment",
+  "name": "current",
+  "operations": [
+    "resolve",
+    "wrap_process",
+    "snapshot"
+  ],
+  "schema_versions": {
+    "environment_descriptor": "1.0",
+    "process_spec": "1.0"
+  },
+  "version": "1.1.4",
+  "user_config": {
+    "schema_version": "1.0",
+    "parameters_schema": "user_parameters.schema.json",
+    "profile_required": false
+  }
+}

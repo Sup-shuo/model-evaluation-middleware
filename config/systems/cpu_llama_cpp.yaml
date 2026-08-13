@@ -1,0 +1,55 @@
+schema_version: "1.2"
+
+# Generic CPU + llama.cpp example for a local GGUF checkpoint.
+system:
+  name: cpu-llama-cpp-example
+
+metadata:
+  timezone: Asia/Shanghai
+
+profiles:
+  defaults:
+    hardware: cpu
+    backend: llama_cpp
+    evaluator: lm_eval
+
+  environment:
+    backend:
+      type: current
+    evaluator:
+      type: venv
+      profile: /opt/venvs/lm-eval
+
+  hardware:
+    cpu:
+      type: cpu
+      runtime:
+        type: cpu
+
+  backend:
+    llama_cpp:
+      type: llama_cpp
+      executable: /usr/local/bin/llama-server
+      environment: backend
+      compatibility:
+        runtime_families: [cpu]
+      parameters:
+        port: 8091
+        context_length: 4096
+        num_concurrent: 2
+
+  evaluator:
+    lm_eval:
+      type: lm_eval
+      root: /opt/lm-evaluation-harness
+      environment: evaluator
+      parameters:
+        provenance_policy: migration
+        require_clean_framework: false
+
+models:
+  root: /data/models
+
+paths:
+  cache: /var/cache/model-evaluation
+  results: results

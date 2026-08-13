@@ -1,0 +1,13 @@
+schema_version: '1.1'
+id: ollama_managed_example
+backend:
+  adapter: ollama
+management:
+  mode: managed
+parameters:
+  port: 11434
+  num_concurrent: 8
+  ready_timeout_seconds: 180
+compatibility:
+  runtime_families:
+  - cpu

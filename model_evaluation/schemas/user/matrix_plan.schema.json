@@ -1,0 +1,13 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"matrix_plan.schema.json",
+  "type":"object","additionalProperties":false,
+  "required":["schema_version","matrix_id","matrix_spec","plans","summary"],
+  "properties":{
+    "schema_version":{"const":"1.0"},
+    "matrix_id":{"type":"string","pattern":"^matrix-[a-f0-9]{24}$"},
+    "matrix_spec":{"type":"object"},
+    "plans":{"type":"array","items":{"type":"object"}},
+    "summary":{"type":"object","additionalProperties":true}
+  }
+}

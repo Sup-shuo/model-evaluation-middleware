@@ -1,0 +1,12 @@
+{
+  "$id": "generic_openai.user_parameters.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "ready_timeout_seconds": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    }
+  },
+  "type": "object"
+}

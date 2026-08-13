@@ -1,0 +1,14 @@
+schema_version: "1.0"
+id: mmlu_abstract_algebra_smoke
+dataset:
+  provider: virtual
+  revision: lm-eval-pinned-by-framework-profile
+protocol:
+  task: mmlu_abstract_algebra
+  split: test
+  fewshot: 0
+  inference: [multiple_choice]
+metrics: [accuracy]
+metadata:
+  purpose: End-to-end local smoke test; evaluator limit must remain explicit.
+  migration_note: Replace the virtual provider with a concrete MMLU provider before using this example in a real run.

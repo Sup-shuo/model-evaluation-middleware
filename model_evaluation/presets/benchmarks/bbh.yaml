@@ -1,0 +1,19 @@
+schema_version: "1.0"
+id: bbh
+dataset:
+  provider: bbh_local
+  revision: 9ee07bd481feebf959a6b59d61ea57bdcf30964d
+  parameters:
+    integrity_policy: basic
+protocol:
+  task: leaderboard_bbh
+  split: test
+  fewshot: 3
+  inference: [multiple_choice]
+metrics: [accuracy]
+bindings:
+  lm_eval: lm_eval.bbh
+metadata:
+  suite: BIG-Bench Hard leaderboard multiple-choice subset
+  task_count: 24
+  cache_policy: Materialize into the configured cache root; basic mode validates the complete task set and JSON structure without requiring external-byte digests.

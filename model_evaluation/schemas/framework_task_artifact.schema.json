@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "framework_task_artifact.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "framework",
+    "benchmark_id",
+    "task_id",
+    "protocol_fingerprint"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "framework": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "benchmark_id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_root": {
+      "type": "string"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/artifactRef"
+      }
+    },
+    "protocol_fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "inference": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "num_fewshot": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "namespace": {
+          "enum": [
+            "framework_native",
+            "canonical"
+          ]
+        },
+        "required": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "mapping": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "strict": {
+          "type": "boolean"
+        },
+        "framework_revision": {
+          "type": "string"
+        },
+        "source_fingerprinted": {
+          "type": "boolean"
+        },
+        "policy": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

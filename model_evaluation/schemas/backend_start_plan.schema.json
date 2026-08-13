@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "backend_start_plan.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "attach"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.1"
+    },
+    "process": {
+      "$ref": "process_spec.schema.json"
+    },
+    "dependency_probe": {
+      "$ref": "process_spec.schema.json"
+    },
+    "attach": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "base_url",
+        "model_id",
+        "ownership",
+        "auth"
+      ],
+      "properties": {
+        "base_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "model_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ownership": {
+          "enum": [
+            "managed",
+            "attached",
+            "external"
+          ]
+        },
+        "auth": {
+          "type": "object"
+        }
+      }
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeout_seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "shutdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "strategy",
+        "signal",
+        "timeout_seconds"
+      ],
+      "properties": {
+        "strategy": {
+          "const": "signal"
+        },
+        "signal": {
+          "enum": [
+            "SIGTERM",
+            "SIGINT"
+          ]
+        },
+        "timeout_seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    }
+  }
+}

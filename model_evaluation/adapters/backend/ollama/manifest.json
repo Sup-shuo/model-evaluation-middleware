@@ -1,0 +1,32 @@
+{
+  "adapter_api": "1.0",
+  "implementation": {
+    "language": "python"
+  },
+  "kind": "backend",
+  "name": "ollama",
+  "operations": [
+    "requirements",
+    "plan_start",
+    "probe_service",
+    "snapshot"
+  ],
+  "schema_versions": {
+    "backend_start_plan": "1.1",
+    "process_spec": "1.0",
+    "requirement_set": "1.0",
+    "service_descriptor": "1.0"
+  },
+  "user_config": {
+    "default_management_mode": "managed",
+    "default_parameters": {
+      "num_concurrent": 8,
+      "port": 11434,
+      "ready_timeout_seconds": 180,
+      "shutdown_timeout_seconds": 15.0
+    },
+    "parameters_schema": "user_parameters.schema.json",
+    "schema_version": "1.0"
+  },
+  "version": "1.3.5"
+}

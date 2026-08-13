@@ -1,0 +1,299 @@
+{
+  "$defs": {
+    "backendProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {
+          "type": "object"
+        },
+        "environment": {
+          "$ref": "#/$defs/environment"
+        },
+        "executable": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "managed",
+            "attached",
+            "external"
+          ]
+        },
+        "model_root": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "type": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "compatibility": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "runtime_families": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "environment": {
+      "oneOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "executable": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "name": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "parameters": {
+              "type": "object"
+            },
+            "profile": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object",
+          "not": {
+            "required": [
+              "profile",
+              "name"
+            ]
+          }
+        }
+      ]
+    },
+    "evaluatorProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "environment": {
+          "$ref": "#/$defs/environment"
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "preset": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "root": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "hardwareProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "devices": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer",
+                "minimum": 0
+              }
+            ]
+          }
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "runtime": {
+          "$ref": "#/$defs/runtimeProfile"
+        },
+        "type": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "runtime"
+      ],
+      "type": "object"
+    },
+    "runtimeProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "parameters": {
+          "type": "object"
+        },
+        "profile": {
+          "type": "string"
+        },
+        "root": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "user_system.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "metadata": {
+      "type": "object"
+    },
+    "models": {
+      "additionalProperties": false,
+      "properties": {
+        "root": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "paths": {
+      "additionalProperties": false,
+      "properties": {
+        "cache": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "results": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "cache"
+      ],
+      "type": "object"
+    },
+    "profiles": {
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "additionalProperties": {
+            "$ref": "#/$defs/backendProfile"
+          },
+          "minProperties": 1,
+          "type": "object"
+        },
+        "defaults": {
+          "additionalProperties": false,
+          "properties": {
+            "backend": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "evaluator": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "hardware": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "evaluator": {
+          "additionalProperties": {
+            "$ref": "#/$defs/evaluatorProfile"
+          },
+          "minProperties": 1,
+          "type": "object"
+        },
+        "hardware": {
+          "additionalProperties": {
+            "$ref": "#/$defs/hardwareProfile"
+          },
+          "minProperties": 1,
+          "type": "object"
+        },
+        "environment": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/environment"
+          }
+        }
+      },
+      "required": [
+        "backend",
+        "evaluator"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "1.2"
+    },
+    "system": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "system",
+    "profiles",
+    "models",
+    "paths"
+  ],
+  "type": "object"
+}

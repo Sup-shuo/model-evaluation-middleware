@@ -1,0 +1,120 @@
+{
+  "$id": "vllm.user_parameters.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "api_model_name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "cache_root": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "chat_template": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "cwd": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "dependency_probe_timeout_seconds": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    },
+    "dtype": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "executable": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "extra_args": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "generation_config": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "gpu_memory_utilization": {
+      "exclusiveMinimum": 0,
+      "maximum": 1,
+      "type": "number"
+    },
+    "language_model_only": {
+      "type": "boolean"
+    },
+    "max_model_len": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "max_num_seqs": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "model_probe_timeout_seconds": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    },
+    "num_concurrent": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "port": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "pythonhashseed": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        {
+          "minLength": 1,
+          "type": "string"
+        }
+      ]
+    },
+    "ready_timeout_seconds": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "tensor_parallel_size": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "tokenizers_parallelism": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "minLength": 1,
+          "type": "string"
+        }
+      ]
+    },
+    "trust_remote_code": {
+      "type": "boolean"
+    },
+    "shutdown_timeout_seconds": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    }
+  },
+  "type": "object"
+}

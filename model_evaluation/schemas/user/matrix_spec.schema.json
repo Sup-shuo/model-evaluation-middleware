@@ -1,0 +1,118 @@
+{
+  "$defs": {
+    "ids": {
+      "items": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "selector": {
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "benchmark": {
+          "type": "string"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "evaluation": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$id": "matrix_spec.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "benchmarks": {
+      "$ref": "#/$defs/ids"
+    },
+    "deployments": {
+      "$ref": "#/$defs/ids"
+    },
+    "evaluations": {
+      "$ref": "#/$defs/ids"
+    },
+    "exclude": {
+      "items": {
+        "$ref": "#/$defs/selector"
+      },
+      "type": "array"
+    },
+    "execution": {
+      "additionalProperties": false,
+      "properties": {
+        "continue_on_error": {
+          "type": "boolean"
+        },
+        "max_combinations": {
+          "maximum": 1000000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "max_runs": {
+          "maximum": 100000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "mode": {
+          "const": "serial"
+        }
+      },
+      "type": "object"
+    },
+    "id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@+-]*$",
+      "type": "string"
+    },
+    "models": {
+      "$ref": "#/$defs/ids"
+    },
+    "overrides": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "per_model_overrides": {
+      "additionalProperties": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "object"
+    },
+    "platforms": {
+      "$ref": "#/$defs/ids"
+    },
+    "schema_version": {
+      "const": "1.0"
+    },
+    "tags": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "models",
+    "platforms",
+    "deployments",
+    "benchmarks",
+    "evaluations"
+  ],
+  "type": "object"
+}

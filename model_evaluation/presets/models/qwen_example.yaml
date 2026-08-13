@@ -1,0 +1,11 @@
+schema_version: '1.0'
+id: qwen_example
+source:
+  type: registry
+  ref: Qwen/Qwen3.5-9B
+  revision: replace-with-a-fixed-revision-if-known
+architecture: qwen
+metadata:
+  note: ModelSpec contains no device/backend deployment flags.
+provenance:
+  policy: migration

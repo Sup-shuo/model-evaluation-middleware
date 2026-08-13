@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "adapter_request.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "api_version",
+    "request_id",
+    "operation",
+    "input"
+  ],
+  "properties": {
+    "api_version": {
+      "$ref": "common.schema.json#/$defs/schemaVersion"
+    },
+    "request_id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "operation": {
+      "type": "string",
+      "minLength": 1
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

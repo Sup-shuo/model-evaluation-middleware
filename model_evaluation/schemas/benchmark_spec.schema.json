@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "benchmark_spec.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "dataset",
+    "protocol",
+    "metrics"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider"
+      ],
+      "properties": {
+        "provider": {
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "protocol": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "metrics": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "common.schema.json#/$defs/id"
+      }
+    }
+  }
+}

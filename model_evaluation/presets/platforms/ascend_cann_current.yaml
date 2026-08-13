@@ -1,0 +1,14 @@
+schema_version: '1.1'
+id: ascend_cann_current
+device:
+  adapter: ascend
+  devices:
+  - '0'
+runtime:
+  adapter: cann
+backend_environment:
+  provider: current
+  profile: current
+evaluation_environment:
+  provider: current
+  profile: current

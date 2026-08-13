@@ -1,0 +1,8 @@
+schema_version: '1.1'
+id: reference_eval_current
+framework:
+  adapter: reference_eval
+metadata:
+  purpose: adapter-protocol-reference-only
+binding:
+  adapter: reference_eval

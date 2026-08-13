@@ -1,0 +1,20 @@
+schema_version: "1.0"
+
+id: qwen-example
+label: Example local Qwen model
+
+source:
+  type: local
+  ref: Qwen/Qwen3.5-0.8B-Base
+
+architecture: qwen3_5
+format: safetensors
+context_length: 4096
+
+backends:
+  vllm:
+    max_model_len: 4096
+    trust_remote_code: true
+
+provenance:
+  policy: migration

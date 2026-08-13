@@ -1,0 +1,28 @@
+{
+  "adapter_api": "1.0",
+  "implementation": {
+    "language": "python"
+  },
+  "kind": "backend",
+  "name": "generic_openai",
+  "operations": [
+    "requirements",
+    "plan_start",
+    "probe_service",
+    "snapshot"
+  ],
+  "schema_versions": {
+    "backend_start_plan": "1.1",
+    "requirement_set": "1.0",
+    "service_descriptor": "1.0"
+  },
+  "user_config": {
+    "default_management_mode": "external",
+    "default_parameters": {
+      "ready_timeout_seconds": 30
+    },
+    "parameters_schema": "user_parameters.schema.json",
+    "schema_version": "1.0"
+  },
+  "version": "1.5.4"
+}

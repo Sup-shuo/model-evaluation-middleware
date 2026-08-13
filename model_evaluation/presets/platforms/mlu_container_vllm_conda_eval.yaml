@@ -1,0 +1,18 @@
+schema_version: '1.1'
+id: mlu_container_vllm_conda_eval
+device:
+  adapter: mlu
+  devices:
+  - '0'
+runtime:
+  adapter: neuware
+  parameters:
+    root: /usr/local/neuware
+evaluation_environment:
+  provider: conda
+  profile: lm_eval_env
+  parameters:
+    executable: /REPLACE_WITH_CONDA_EXECUTABLE
+backend_environment:
+  provider: current
+  profile: current

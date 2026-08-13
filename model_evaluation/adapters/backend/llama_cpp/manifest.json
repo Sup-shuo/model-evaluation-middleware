@@ -1,0 +1,40 @@
+{
+  "adapter_api": "1.0",
+  "implementation": {
+    "language": "python"
+  },
+  "kind": "backend",
+  "name": "llama_cpp",
+  "operations": [
+    "requirements",
+    "plan_start",
+    "probe_service",
+    "snapshot"
+  ],
+  "schema_versions": {
+    "backend_start_plan": "1.1",
+    "process_spec": "1.0",
+    "requirement_set": "1.0",
+    "service_descriptor": "1.0"
+  },
+  "user_config": {
+    "default_management_mode": "managed",
+    "default_parameters": {
+      "context_length": 4096,
+      "num_concurrent": 8,
+      "port": 8091,
+      "ready_timeout_seconds": 300,
+      "shutdown_timeout_seconds": 15.0
+    },
+    "model_location": {
+      "modes": [
+        "managed"
+      ],
+      "path_template": "{model.source.ref}",
+      "requires_root": true
+    },
+    "parameters_schema": "user_parameters.schema.json",
+    "schema_version": "1.0"
+  },
+  "version": "1.3.5"
+}

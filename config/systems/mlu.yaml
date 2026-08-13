@@ -1,0 +1,59 @@
+schema_version: "1.2"
+
+# Generic single-card Cambricon MLU example. Adapt paths to your container.
+system:
+  name: mlu-vllm-example
+
+metadata:
+  timezone: Asia/Shanghai
+
+profiles:
+  defaults:
+    hardware: mlu
+    backend: vllm
+    evaluator: lm_eval
+
+  environment:
+    backend:
+      type: venv
+      profile: /opt/venvs/vllm-mlu
+    evaluator:
+      type: venv
+      profile: /opt/venvs/lm-eval
+
+  hardware:
+    mlu:
+      type: mlu
+      devices: [0]
+      runtime:
+        type: neuware
+        root: /usr/local/neuware
+
+  backend:
+    vllm:
+      type: vllm
+      executable: vllm
+      environment: backend
+      compatibility:
+        runtime_families: [neuware]
+      parameters:
+        port: 8091
+        gpu_memory_utilization: 0.80
+        max_num_seqs: 4
+        num_concurrent: 4
+
+  evaluator:
+    lm_eval:
+      type: lm_eval
+      root: /opt/lm-evaluation-harness
+      environment: evaluator
+      parameters:
+        provenance_policy: migration
+        require_clean_framework: false
+
+models:
+  root: /data/models
+
+paths:
+  cache: /var/cache/model-evaluation
+  results: results

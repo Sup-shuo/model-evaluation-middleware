@@ -1,0 +1,55 @@
+{
+  "adapter_api": "1.0",
+  "implementation": {
+    "language": "python"
+  },
+  "kind": "backend",
+  "name": "vllm",
+  "operations": [
+    "requirements",
+    "plan_preflight",
+    "plan_start",
+    "probe_service",
+    "snapshot"
+  ],
+  "schema_versions": {
+    "backend_start_plan": "1.1",
+    "backend_preflight_plan": "1.0",
+    "preflight_probe_result": "1.0",
+    "process_spec": "1.0",
+    "requirement_set": "1.0",
+    "service_descriptor": "1.0"
+  },
+  "user_config": {
+    "default_management_mode": "managed",
+    "default_parameters": {
+      "gpu_memory_utilization": 0.8,
+      "language_model_only": false,
+      "dependency_probe_timeout_seconds": 45.0,
+      "max_num_seqs": 16,
+      "num_concurrent": 16,
+      "pythonhashseed": 1234,
+      "port": 8091,
+      "ready_timeout_seconds": 900,
+      "seed": 1234,
+      "tensor_parallel_size": 1,
+      "shutdown_timeout_seconds": 15.0
+    },
+    "derived_parameters": {
+      "tensor_parallel_size": {
+        "minimum": 1,
+        "source": "selected_device_count"
+      }
+    },
+    "model_location": {
+      "modes": [
+        "managed"
+      ],
+      "path_template": "{model.source.ref}",
+      "requires_root": true
+    },
+    "parameters_schema": "user_parameters.schema.json",
+    "schema_version": "1.0"
+  },
+  "version": "1.6.4"
+}

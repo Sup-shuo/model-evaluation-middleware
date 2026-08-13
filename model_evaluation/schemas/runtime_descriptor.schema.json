@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "runtime_descriptor.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "family",
+    "available",
+    "capabilities"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "family": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string"
+    },
+    "driver_version": {
+      "type": "string"
+    },
+    "available": {
+      "type": "boolean"
+    },
+    "capabilities": {
+      "$ref": "capability_set.schema.json"
+    },
+    "env_patch": {
+      "$ref": "env_patch.schema.json"
+    }
+  }
+}

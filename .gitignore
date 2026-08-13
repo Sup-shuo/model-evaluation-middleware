@@ -1,0 +1,34 @@
+# Generated evaluation state
+/results/*
+!/results/.gitignore
+/cache/
+/runtime/
+
+# Private deployment overlays (pass their paths explicitly to eval-manager)
+config/private/
+.env
+.env.*
+!.env.example
+
+# Python and build output
+__pycache__/
+*.py[cod]
+*.egg-info/
+/build/
+/dist/
+.pytest_cache/
+.coverage
+htmlcov/
+/.venv/
+/venv/
+
+# Editors and host metadata
+.DS_Store
+._*
+.idea/
+.vscode/
+*.swp
+
+# Release archives
+*.zip
+*.whl

@@ -1,0 +1,17 @@
+schema_version: '1.1'
+id: llama_cpp_template_example
+backend:
+  adapter: llama_cpp
+management:
+  mode: managed
+model_location:
+  root: /models
+  path_template: '{model.source.ref}.gguf'
+parameters:
+  port: 8091
+  context_length: 4096
+  num_concurrent: 8
+  ready_timeout_seconds: 300
+compatibility:
+  runtime_families:
+  - cpu

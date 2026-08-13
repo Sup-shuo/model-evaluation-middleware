@@ -1,0 +1,26 @@
+{
+  "adapter_api": "1.0",
+  "implementation": {
+    "language": "python",
+    "purpose": "protocol-reference-only"
+  },
+  "kind": "evaluator",
+  "name": "reference_eval",
+  "operations": [
+    "requirements",
+    "plan_evaluate",
+    "normalize",
+    "snapshot"
+  ],
+  "schema_versions": {
+    "process_spec": "1.0",
+    "canonical_result": "1.0",
+    "requirement_set": "1.0"
+  },
+  "version": "1.0.1",
+  "user_config": {
+    "schema_version": "1.0",
+    "parameters_schema": "user_parameters.schema.json",
+    "root_required": false
+  }
+}

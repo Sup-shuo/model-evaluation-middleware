@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "model-evaluation-middleware"
+version = "4.1.0a30"
+description = "Portable glue layer for reproducible model evaluation across hardware and frameworks"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.10"
+dependencies = ["jsonschema>=4.18", "PyYAML>=6.0"]
+keywords = ["evaluation", "llm", "vllm", "llama.cpp", "benchmark", "orchestration"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.scripts]
+eval-manager = "model_evaluation.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["model_evaluation*"]
+exclude = ["config*", "results*", "scripts*", "tests*"]
+namespaces = true
+
+[tool.setuptools.package-data]
+model_evaluation = [
+  "VERSION.txt",
+  "schemas/*.json",
+  "schemas/user/*.json",
+  "presets/*/*.yaml",
+  "adapters/*/*/adapter",
+  "adapters/*/*/*.py",
+  "adapters/*/*/*.json",
+  "adapters/*/*/*.tsv",
+]

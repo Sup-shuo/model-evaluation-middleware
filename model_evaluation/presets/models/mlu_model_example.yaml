@@ -1,0 +1,7 @@
+schema_version: '1.0'
+id: mlu_model_example
+source:
+  type: local
+  ref: REPLACE_WITH_MODEL_RELATIVE_PATH
+provenance:
+  policy: migration

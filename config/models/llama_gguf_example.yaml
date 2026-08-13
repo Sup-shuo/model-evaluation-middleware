@@ -1,0 +1,21 @@
+schema_version: "1.0"
+
+id: llama-gguf-example
+label: Example local Llama GGUF model
+
+source:
+  type: local
+  ref: Llama/Meta-Llama-3.2-1B-Instruct-Q4_K_M.gguf
+
+architecture: llama
+quantization: q4_k_m
+format: gguf
+context_length: 4096
+
+backends:
+  llama_cpp:
+    context_length: 4096
+    api_model_name: llama-gguf-example
+
+provenance:
+  policy: migration

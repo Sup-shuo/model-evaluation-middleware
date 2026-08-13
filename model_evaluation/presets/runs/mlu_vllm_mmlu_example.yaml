@@ -1,0 +1,17 @@
+schema_version: "1.0"
+
+model: mlu_model_example
+platform: mlu_container_vllm_conda_eval
+deployment: vllm_mlu_container
+benchmark: mmlu
+evaluation: lm_eval_mlu_container
+
+tags:
+  - mlu
+  - vllm
+  - mmlu
+
+overrides:
+  # 首次运行如果 lm-eval 需要访问数据源，设为 false。
+  # 已提前准备完整缓存的纯离线环境可改为 true。
+  offline: false

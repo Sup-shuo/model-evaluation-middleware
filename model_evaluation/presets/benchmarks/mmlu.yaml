@@ -1,0 +1,13 @@
+schema_version: "1.0"
+id: mmlu
+dataset:
+  provider: virtual
+  revision: lm-eval-pinned-by-framework-profile
+protocol:
+  task: mmlu
+  split: test
+  fewshot: 5
+  inference: [multiple_choice]
+metrics: [accuracy]
+metadata:
+  migration_note: Replace the virtual provider with a concrete MMLU provider before using this example in a real run.

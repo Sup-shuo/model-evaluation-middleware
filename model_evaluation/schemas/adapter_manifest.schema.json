@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "adapter_manifest.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "adapter_api",
+    "kind",
+    "name",
+    "version",
+    "operations"
+  ],
+  "properties": {
+    "adapter_api": {
+      "$ref": "common.schema.json#/$defs/schemaVersion"
+    },
+    "kind": {
+      "enum": [
+        "device",
+        "runtime",
+        "environment",
+        "backend",
+        "dataset",
+        "binding",
+        "evaluator"
+      ]
+    },
+    "name": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "version": {
+      "$ref": "common.schema.json#/$defs/semver"
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "schema_versions": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "common.schema.json#/$defs/schemaVersion"
+      }
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": true,
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "user_config"
+            ]
+          },
+          {
+            "required": [
+              "user_parameters_schema"
+            ]
+          }
+        ]
+      }
+    },
+    "user_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "parameters_schema": {
+          "type": "string",
+          "minLength": 1
+        },
+        "default_management_mode": {
+          "enum": [
+            "managed",
+            "attached",
+            "external"
+          ]
+        },
+        "default_parameters": {
+          "type": "object"
+        },
+        "derived_parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source"
+            ],
+            "properties": {
+              "source": {
+                "enum": [
+                  "selected_device_count"
+                ]
+              },
+              "minimum": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "model_location": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "modes": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "managed",
+                  "attached",
+                  "external"
+                ]
+              }
+            },
+            "path_template": {
+              "type": "string",
+              "minLength": 1
+            },
+            "requires_root": {
+              "type": "boolean"
+            }
+          }
+        },
+        "profile_required": {
+          "type": "boolean"
+        },
+        "root_required": {
+          "type": "boolean"
+        },
+        "root_parameter": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

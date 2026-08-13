@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "device_descriptor.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "vendor",
+    "device_type",
+    "devices",
+    "capabilities"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "vendor": {
+      "type": "string",
+      "minLength": 1
+    },
+    "device_type": {
+      "enum": [
+        "accelerator",
+        "cpu",
+        "other"
+      ]
+    },
+    "devices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "memory_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "uuid": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "capabilities": {
+      "$ref": "capability_set.schema.json"
+    }
+  }
+}

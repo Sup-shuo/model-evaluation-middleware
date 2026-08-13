@@ -1,0 +1,9 @@
+schema_version: "1.0"
+model: qwen_example
+platform: nvidia_cuda_current
+deployment: vllm_local_example
+benchmark: mmlu
+evaluation: lm_eval_current
+tags: [example, managed]
+overrides:
+  offline: true

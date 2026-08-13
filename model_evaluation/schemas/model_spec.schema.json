@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "model_spec.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "source"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "ref"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "hf",
+            "local",
+            "registry",
+            "other"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string"
+        }
+      }
+    },
+    "architecture": {
+      "type": "string"
+    },
+    "quantization": {
+      "type": "string"
+    },
+    "format": {
+      "type": "string"
+    },
+    "context_length": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "tokenizer": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "chat_template": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trust_remote_code": {
+      "type": "boolean"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "policy": {
+          "enum": [
+            "migration",
+            "pinned"
+          ]
+        }
+      }
+    },
+    "experiment_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

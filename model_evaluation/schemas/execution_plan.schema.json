@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "execution_plan.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "run_spec",
+    "adapters",
+    "compatibility",
+    "resources",
+    "stages"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "plan_id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "run_spec": {
+      "$ref": "run_spec.schema.json"
+    },
+    "adapters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "name",
+          "version"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "device",
+              "runtime",
+              "environment",
+              "backend",
+              "dataset",
+              "binding",
+              "evaluator"
+            ]
+          },
+          "name": {
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "version": {
+            "$ref": "common.schema.json#/$defs/semver"
+          }
+        }
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "compatible",
+            "incompatible",
+            "unknown"
+          ]
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "$ref": "resource_claim.schema.json"
+      }
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "PLATFORM_READY",
+          "DATA_READY",
+          "TASK_READY",
+          "EVALUATOR_PREFLIGHT",
+          "SERVICE_STARTING",
+          "SERVICE_READY",
+          "EVALUATING",
+          "NORMALIZING",
+          "CLEANING"
+        ]
+      },
+      "minItems": 1
+    },
+    "resolved": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "protocol_fingerprints": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "stage",
+          "adapter",
+          "operation",
+          "message"
+        ],
+        "properties": {
+          "stage": {
+            "type": "string"
+          },
+          "adapter": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

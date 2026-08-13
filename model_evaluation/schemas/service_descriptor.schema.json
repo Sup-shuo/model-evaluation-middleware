@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "service_descriptor.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "service_type",
+    "ownership",
+    "model",
+    "protocols",
+    "capabilities",
+    "auth"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "service_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ownership": {
+      "enum": [
+        "managed",
+        "attached",
+        "external"
+      ]
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/$defs/id"
+        }
+      }
+    },
+    "protocols": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      }
+    },
+    "capabilities": {
+      "$ref": "capability_set.schema.json"
+    },
+    "context_length": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "none",
+            "bearer",
+            "custom"
+          ]
+        },
+        "secret_ref": {
+          "$ref": "common.schema.json#/$defs/secretRef"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "tokenizer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "none",
+            "local",
+            "remote"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "recommended_concurrency": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

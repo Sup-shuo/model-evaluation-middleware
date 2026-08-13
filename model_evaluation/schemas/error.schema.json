@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "error.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "code",
+    "message",
+    "retryable"
+  ],
+  "properties": {
+    "code": {
+      "enum": [
+        "CONFIG_INVALID",
+        "CONFIG_CONFLICT",
+        "COMPATIBILITY_ERROR",
+        "RESOURCE_UNAVAILABLE",
+        "DEPENDENCY_MISSING",
+        "SERVICE_START_FAILED",
+        "SERVICE_NOT_READY",
+        "DATASET_INVALID",
+        "EVALUATION_FAILED",
+        "RESULT_INVALID",
+        "ADAPTER_PROTOCOL_ERROR",
+        "ADAPTER_INTERNAL_ERROR"
+      ]
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1
+    },
+    "retryable": {
+      "type": "boolean"
+    },
+    "details": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}
