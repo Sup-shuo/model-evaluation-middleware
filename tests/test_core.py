@@ -1141,13 +1141,28 @@ overrides:
 
     def test_run_id_is_model_benchmark_short_local_timestamp(self):
         plan={
-            'run_spec':{'model':'user-model-qwen35-08b-base-deadbeef','benchmark':'bbh'},
-            'resolved':{'specs':{'model':{'experiment_id':'qwen35-08b-base'}}},
+            'run_spec':{
+                'model':'user-model-qwen35-08b-base-deadbeef',
+                'platform':'internal-platform',
+                'deployment':'internal-deployment',
+                'benchmark':'bbh',
+            },
+            'resolved':{'specs':{
+                'model':{'experiment_id':'qwen35-08b-base'},
+                'platform':{'device':{'adapter':'mlu'},'metadata':{'result_platform':'mlu'}},
+                'deployment':{'backend':{'adapter':'vllm'}},
+            }},
         }
         run_id=Orchestrator._run_id(plan)
-        self.assertRegex(run_id,r'^qwen35-08b-base_bbh_\d{8}-\d{6}$')
-        safe=Orchestrator._run_id({'run_spec':{'model':'org/model:revision','benchmark':'suite/name'}})
-        self.assertRegex(safe,r'^org-model-revision_suite-name_\d{8}-\d{6}$')
+        self.assertRegex(run_id,r'^mlu_qwen35-08b-base_vllm_bbh_\d{6}-\d{4}$')
+        safe=Orchestrator._run_id({'run_spec':{
+            'model':'org/model:revision','platform':'hardware/name',
+            'deployment':'backend/name','benchmark':'suite/name',
+        }})
+        self.assertRegex(
+            safe,
+            r'^hardware-name_org-model-revision_backend-name_suite-name_\d{6}-\d{4}$',
+        )
         self.assertNotIn('/',safe)
 
     def test_bbh_binding_exposes_canonical_accuracy_contract(self):
@@ -1425,14 +1440,16 @@ overrides:
         self.assertIn('<redacted>',rendered)
 
     def test_current_environment_resolve_uses_controller_python_context(self):
-        from unittest.mock import patch
         app=Application(PACKAGE_ROOT, ROOT)
         client=app.registry.get('environment','current')
-        fake=str((Path(tempfile.gettempdir())/'controller-venv'/'bin'/'python').resolve())
-        with patch('model_evaluation.core.registry.adapter_registry.sys.executable',fake):
-            out=client.invoke('resolve',{'profile':'current','parameters':{}},context={'controller_python':'/caller-cannot-override'})
-        self.assertEqual(out['python'],fake)
-        self.assertEqual(out['executable_root'],str(Path(fake).parent))
+        expected=str(Path(sys.executable).resolve())
+        out=client.invoke(
+            'resolve',
+            {'profile':'current','parameters':{}},
+            context={'controller_python':'/caller-cannot-override'},
+        )
+        self.assertEqual(out['python'],expected)
+        self.assertEqual(out['executable_root'],str(Path(expected).parent))
 
     def test_current_environment_snapshot_probes_the_recorded_python(self):
         from model_evaluation.adapters.environment.current import impl as current_env
@@ -1517,6 +1534,46 @@ overrides:
                 with self.assertRaisesRegex(ProcessError,'failed to prepare/start process'):
                     pm.start(spec)
             self.assertTrue(opened.closed)
+
+    def test_release_staging_filters_host_metadata_and_rejects_symlinks(self):
+        import runpy
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td).resolve()/'project'; root.mkdir()
+            results=root/'results'; results.mkdir(); marker=results/'result.json'; marker.write_text('{}\n')
+            source=root/'model_evaluation'/'core'; source.mkdir(parents=True); (source/'app.py').write_text('# runtime\n')
+            apple_double=source/'._app.py'; apple_double.write_bytes(b'\x00AppleDouble')
+            schemas=root/'model_evaluation'/'schemas'; schemas.mkdir(parents=True)
+            schema=schemas/'adapter_manifest.schema.json'; schema.write_text('{}\n')
+            schema_apple_double=schemas/'._adapter_manifest.schema.json'; schema_apple_double.write_bytes(b'\x00AppleDouble')
+            nested_metadata=source/'._metadata'; nested_metadata.mkdir(); (nested_metadata/'payload.py').write_text('SECRET = True\n')
+            finder_metadata=root/'.DS_Store'; finder_metadata.write_bytes(b'Finder metadata')
+            stage=Path(td)/'stage'
+            release=runpy.run_path(str(ROOT/'scripts'/'build_release.py'))
+            calls=[]
+            prepare=release['prepare_release_stage']
+            prepare.__globals__['validate_tree']=lambda path: calls.append(('validate',path))
+            prepare.__globals__['check_installable_bundle']=lambda path: calls.append(('wheel',path))
+            prepare(root,stage)
+            ignored_link=results/'ignored-link'; ignored_link.symlink_to(source/'app.py')
+            release['reject_release_symlinks'](root,label='release source tree',ignore_excluded=True)
+            self.assertTrue(marker.is_file())
+            self.assertTrue(apple_double.is_file())
+            self.assertTrue(finder_metadata.is_file())
+            self.assertFalse((stage/'results').exists())
+            self.assertFalse((stage/'.DS_Store').exists())
+            self.assertFalse((stage/'model_evaluation'/'core'/'._app.py').exists())
+            self.assertFalse((stage/'model_evaluation'/'core'/'._metadata').exists())
+            self.assertTrue((stage/'model_evaluation'/'core'/'app.py').is_file())
+            self.assertEqual(calls,[('validate',stage),('wheel',stage)])
+            released=list(release['files_under'](stage))
+            self.assertIn(stage/'model_evaluation'/'schemas'/'adapter_manifest.schema.json',released)
+            self.assertNotIn(stage/'model_evaluation'/'core'/'._metadata'/'payload.py',released)
+
+            unsafe=root/'linked-runtime.py'; unsafe.symlink_to(source/'app.py')
+            with self.assertRaisesRegex(SystemExit,'release source tree contains symlink: linked-runtime.py'):
+                release['reject_release_symlinks'](root,label='release source tree',ignore_excluded=True)
+            with self.assertRaisesRegex(SystemExit,'release staging tree contains symlink: linked-runtime.py'):
+                prepare(root,Path(td)/'unsafe-stage')
 
     def test_current_environment_wrap_uses_resolved_python(self):
         from model_evaluation.adapters.environment.current import impl as current_env
@@ -1954,10 +2011,18 @@ server.serve_forever()
         path.write_text(script,encoding='utf-8')
         path.chmod(0o755)
 
-    def _managed_e2e_plan(self, app: Application, root: Path, *, wrong_model: bool) -> dict:
+    def _managed_e2e_plan(
+        self,
+        app: Application,
+        root: Path,
+        *,
+        wrong_model: bool,
+        port: int | None = None,
+    ) -> dict:
         import socket
-        with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as sock:
-            sock.bind(('127.0.0.1',0)); port=int(sock.getsockname()[1])
+        if port is None:
+            with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as sock:
+                sock.bind(('127.0.0.1',0)); port=int(sock.getsockname()[1])
         model_file=root/'model.gguf'; model_file.write_bytes(b'fake-model')
         executable=root/'fake-llama-server'; self._write_fake_llama_server(executable)
         app.specs.register('model',{
@@ -2028,6 +2093,31 @@ server.serve_forever()
             self.assertFalse((run_dir/'SHA256SUMS').exists())
             self.assertTrue((run_dir/'raw'/'framework_result.json').is_file())
             self.assertFalse(list((root/'runtime'/'processes').glob('process-*.json')))
+
+    def test_initial_persistence_failure_still_publishes_terminal_product(self):
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td).resolve()
+            with patch.dict(os.environ,{'MODEL_EVAL_RUNTIME_ROOT':str(root/'runtime')},clear=False):
+                app=Application(PACKAGE_ROOT, ROOT)
+                plan=self._managed_e2e_plan(app,root,wrong_model=False,port=18091)
+                plan['resources']=[]
+                orch=app.orchestrator(results_root=root/'results',cache_root=root/'cache')
+                with patch.object(orch,'_persist_initial',side_effect=OSError('initial persistence failed')):
+                    with self.assertRaisesRegex(OSError,'initial persistence failed'):
+                        orch.execute(plan)
+
+            runs=[path for path in (root/'results').iterdir() if path.is_dir()]
+            self.assertEqual(len(runs),1)
+            run_dir=runs[0]
+            failure=json_loads_strict((run_dir/'failure.json').read_text())
+            terminal=json_loads_strict((run_dir/'terminal.json').read_text())
+            self.assertEqual(failure['stage'],'INITIALIZING')
+            self.assertEqual(failure['primary_error']['message'],'initial persistence failed')
+            self.assertEqual(terminal['outcome'],'failed')
+            self.assertEqual(terminal['error'],failure['primary_error'])
+            self.assertEqual(terminal['cleanup']['status'],'clean')
 
     def test_orchestrator_managed_e2e_readiness_failure_preserves_error_and_cleans_backend(self):
         from unittest.mock import patch

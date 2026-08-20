@@ -1220,7 +1220,7 @@ class UserConfigTests(unittest.TestCase):
             }
             evaluation={'schema_version':'1.2','models':['model-A'],'benchmarks':['mmlu'],'resources':{'devices':[0]}}
             system_path,evaluation_path=self._write_docs(root,system,evaluation)
-            proc=subprocess.run([sys.executable,str(ROOT/'eval-manager'),'doctor','--system-config',str(system_path),'--evaluation-config',str(evaluation_path)],cwd=ROOT,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=False,env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1'})
+            proc=subprocess.run([sys.executable,str(ROOT/'eval-manager'),'doctor','--format','json','--system-config',str(system_path),'--evaluation-config',str(evaluation_path)],cwd=ROOT,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=False,env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1'})
             self.assertEqual(proc.returncode,0,proc.stdout+proc.stderr)
             out=json.loads(proc.stdout); self.assertTrue(out['ok'])
             checks=out['runs'][0]['checks']

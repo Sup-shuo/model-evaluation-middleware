@@ -10,15 +10,25 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 TOP_LEVEL_EXCLUDED = {".git", "results", "cache", "runtime", "build", "dist"}
 TEXT_SUFFIXES = {
-    "", ".cfg", ".ini", ".json", ".md", ".py", ".rst", ".sh", ".toml", ".txt", ".yaml", ".yml"
+    "",
+    ".cfg",
+    ".ini",
+    ".json",
+    ".md",
+    ".py",
+    ".rst",
+    ".sh",
+    ".toml",
+    ".txt",
+    ".yaml",
+    ".yml",
 }
-
-# These patterns intentionally describe categories rather than a particular
-# person's identifiers. Site-specific allowlists belong outside the public repo.
 PATTERNS = {
     "macOS user home": re.compile(r"/Users/[A-Za-z0-9._-]+/"),
     "Linux user home": re.compile(r"/home/[A-Za-z0-9._-]+/"),
-    "personal AFS path": re.compile(r"/(?:root|mnt)/(?:[^\s'\"`]+/)*afs/(?:users/)?[A-Za-z0-9._-]+/"),
+    "personal AFS path": re.compile(
+        r"/(?:root|mnt)/(?:[^\s'\"`]+/)*afs/(?:users/)?[A-Za-z0-9._-]+/"
+    ),
     "private key": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
     "AWS access key": re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
     "GitHub token": re.compile(r"\bgh[opurs]_[A-Za-z0-9]{20,}\b"),
@@ -38,7 +48,9 @@ def files() -> list[Path]:
             continue
         if relative.parts and relative.parts[0] in TOP_LEVEL_EXCLUDED:
             continue
-        if "__pycache__" in relative.parts or any(part.endswith(".egg-info") for part in relative.parts):
+        if "__pycache__" in relative.parts:
+            continue
+        if any(part.endswith(".egg-info") for part in relative.parts):
             continue
         if path.suffix.lower() in TEXT_SUFFIXES:
             rows.append(path)
@@ -47,7 +59,8 @@ def files() -> list[Path]:
 
 def main() -> None:
     findings: list[str] = []
-    for path in files():
+    public_files = files()
+    for path in public_files:
         try:
             text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
@@ -58,7 +71,7 @@ def main() -> None:
                     findings.append(f"{path.relative_to(ROOT)}:{line_number}: {label}")
     if findings:
         raise SystemExit("public-tree privacy check failed:\n" + "\n".join(findings))
-    print(f"public-tree privacy check passed: {len(files())} text files")
+    print(f"public-tree privacy check passed: {len(public_files)} text files")
 
 
 if __name__ == "__main__":

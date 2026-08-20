@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "failure.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "time",
+    "stage",
+    "primary_error",
+    "cleanup",
+    "logs"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "run_id": {"$ref": "common.schema.json#/$defs/id"},
+    "time": {"type": "string", "format": "date-time"},
+    "stage": {"type": "string", "minLength": 1},
+    "primary_error": {"$ref": "terminal.schema.json#/$defs/error"},
+    "cleanup": {"$ref": "terminal.schema.json#/$defs/cleanup"},
+    "logs": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/log"}
+    },
+    "process": {"type": "object", "additionalProperties": true},
+    "secondary_errors": {
+      "type": "array",
+      "items": {"$ref": "terminal.schema.json#/$defs/error"}
+    }
+  },
+  "$defs": {
+    "log": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "tail"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^logs/"
+        },
+        "tail": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import copy
-import shutil
 import time
-import traceback
 from pathlib import Path
 
 from model_evaluation.core.files import atomic_json
@@ -17,28 +15,88 @@ from model_evaluation.core.compatibility import (
     merge_fact_sets,
 )
 from model_evaluation.core.config.platform import adapter_parameters
-from model_evaluation.core.errors import AdapterExecutionError, CompatibilityError, ModelEvalError, ProcessError, CleanupCriticalError, StaleProcessError
+from model_evaluation.core.errors import (
+    AdapterExecutionError,
+    CompatibilityError,
+    ModelEvalError,
+    ProcessError,
+    StaleProcessError,
+)
 from model_evaluation.core.process.env import prepare_process_for_environment
 from model_evaluation.core.process.manager import ProcessManager
 from model_evaluation.core.process.signals import orchestration_signal_guard
 from model_evaluation.core.resources import ResourceManager
 from model_evaluation.core.results import allocate_run_dir, build_run_config, iso_now, plan_timezone, publish_result
+from model_evaluation.core.runtime_record import (
+    refresh_environment_versions,
+    runtime_versions_base,
+    save_runtime_versions,
+    version_text,
+)
+from model_evaluation.core.run_diagnostics import (
+    append_core_error,
+    current_state,
+    error_record,
+    failure_record,
+    log_tail,
+)
+from model_evaluation.core.backend_preflight import (
+    preflight_error,
+    run_backend_preflight as execute_backend_preflight,
+)
+from model_evaluation.core.run_finalization import finalize_run
 from model_evaluation.core.serialization import json_loads_strict
 from model_evaluation.core.schema.validator import SchemaStore
-from model_evaluation.core.security import redact_text, redact_diagnostic
+from model_evaluation.core.security import redact_diagnostic
 
 class Orchestrator:
-    def __init__(self, *, project_root: str | Path, schemas: SchemaStore, registry, process_manager: ProcessManager, resource_manager: ResourceManager, results_root: str | Path, cache_root: str | Path):
-        self.project_root=Path(project_root).resolve(); self.schemas=schemas; self.registry=registry; self.pm=process_manager; self.resources=resource_manager
-        self.results_root=Path(results_root).resolve(); self.cache_root=Path(cache_root).resolve()
+    def __init__(
+        self,
+        *,
+        project_root: str | Path,
+        schemas: SchemaStore,
+        registry,
+        process_manager: ProcessManager,
+        resource_manager: ResourceManager,
+        results_root: str | Path,
+        cache_root: str | Path,
+    ):
+        self.project_root = Path(project_root).resolve()
+        self.schemas = schemas
+        self.registry = registry
+        self.pm = process_manager
+        self.resources = resource_manager
+        self.results_root = Path(results_root).resolve()
+        self.cache_root = Path(cache_root).resolve()
         self._warning_events: list[dict] = []
         self._active_plan: dict = {}
 
-    def _invoke(self, client, operation: str, input_obj: dict, *, context: dict | None=None, timeout: float | None=None, stage: str='execution') -> dict:
-        out=client.invoke(operation,input_obj,context=context,timeout=timeout)
-        ident=client.identity
+    def _invoke(
+        self,
+        client,
+        operation: str,
+        input_obj: dict,
+        *,
+        context: dict | None = None,
+        timeout: float | None = None,
+        stage: str = "execution",
+    ) -> dict:
+        out = client.invoke(
+            operation,
+            input_obj,
+            context=context,
+            timeout=timeout,
+        )
+        identity = client.identity
         for message in client.last_warnings:
-            self._warning_events.append({'stage':stage,'adapter':f'{ident.kind}/{ident.name}','operation':operation,'message':str(message)})
+            self._warning_events.append(
+                {
+                    "stage": stage,
+                    "adapter": f"{identity.kind}/{identity.name}",
+                    "operation": operation,
+                    "message": str(message),
+                }
+            )
         return out
 
     @staticmethod
@@ -62,79 +120,75 @@ class Orchestrator:
             self._append_core_error(run_dir, state, exc)
 
     def _persist_initial(self, run_dir: Path, plan: dict, *, started_at: str) -> None:
-        for sub in ('config','logs','.run/framework_output','.run/task','.run/dataset'):
-            (run_dir/sub).mkdir(parents=True,exist_ok=True)
-        atomic_json(run_dir/'config'/'run_config.json',build_run_config(plan,run_id=run_dir.name,started_at=started_at))
+        for subdirectory in (
+            "config",
+            "logs",
+            ".run/framework_output",
+            ".run/task",
+            ".run/dataset",
+        ):
+            (run_dir / subdirectory).mkdir(parents=True, exist_ok=True)
+        atomic_json(
+            run_dir / "config" / "run_config.json",
+            build_run_config(
+                plan,
+                run_id=run_dir.name,
+                started_at=started_at,
+            ),
+        )
 
     def _probe_service_until_ready(self, client, attach: dict, auth_value: str | None, timeout_seconds: float, process_handle=None) -> dict:
-        deadline=time.monotonic()+timeout_seconds; last=None
-        while time.monotonic()<deadline:
+        deadline = time.monotonic() + timeout_seconds
+        last = None
+        while time.monotonic() < deadline:
             if process_handle is not None and process_handle.poll() is not None:
                 raise ProcessError(f"backend process exited before readiness: rc={process_handle.poll()}")
             try:
-                inp={'attach':attach}
-                if auth_value is not None: inp['auth_value']=auth_value
-                remaining=max(0.5,deadline-time.monotonic()); attempt_budget=min(20.0,remaining)
-                out=self._invoke(client,'probe_service',inp,context={'timeout_seconds':attempt_budget,'secure_execution':auth_value is not None},timeout=attempt_budget+2.0)
+                input_obj = {"attach": attach}
+                if auth_value is not None:
+                    input_obj["auth_value"] = auth_value
+                remaining = max(0.5, deadline - time.monotonic())
+                attempt_budget = min(20.0, remaining)
+                out = self._invoke(
+                    client,
+                    "probe_service",
+                    input_obj,
+                    context={
+                        "timeout_seconds": attempt_budget,
+                        "secure_execution": auth_value is not None,
+                    },
+                    timeout=attempt_budget + 2.0,
+                )
                 return out
             except AdapterExecutionError as exc:
-                last=exc
-                if not exc.retryable: raise
+                last = exc
+                if not exc.retryable:
+                    raise
                 time.sleep(0.5)
         raise ProcessError(f"service readiness timeout after {timeout_seconds}s: {last}")
 
     def _runtime_versions_base(self, plan: dict, platform: dict, resolved_platform: dict) -> dict:
-        """Build the compact experiment-environment record saved with the result.
-
-        This is ordinary run configuration, not an evidence chain.  It records
-        values already observed by planning/execution and selected Adapter
-        versions without hashing installed packages or external assets.
-        """
-        out={
-            'schema_version':'1.0',
-            'adapters':copy.deepcopy(plan.get('adapters') or []),
-            'device':copy.deepcopy(resolved_platform.get('device')),
-            'runtime':copy.deepcopy(resolved_platform.get('runtime')),
-            'environments':{
-                'backend':copy.deepcopy(resolved_platform.get('backend_environment')),
-                'evaluator':copy.deepcopy(resolved_platform.get('evaluation_environment')),
-            },
-        }
-        if ((plan.get('resolved') or {}).get('management_mode')) != 'managed':
-            out.pop('device',None); out.pop('runtime',None); out['environments'].pop('backend',None)
-        return out
+        # ``platform`` remains in this compatibility method's signature for
+        # callers/tests from earlier releases; the record uses resolved facts.
+        del platform
+        return runtime_versions_base(plan, resolved_platform)
 
     def _refresh_environment_versions(self, platform: dict, resolved_platform: dict, value: dict) -> None:
-        management=((self._active_plan.get('resolved') or {}).get('management_mode'))
-        for role,key in (('backend','backend_environment'),('evaluator','evaluation_environment')):
-            if role == 'backend' and management != 'managed':
-                continue
-            selection=platform.get(key)
-            if not isinstance(selection,dict):
-                continue
-            client=self.registry.get('environment',selection['provider'])
-            try:
-                snapshot=self._invoke(
-                    client,'snapshot',
-                    {'profile':selection.get('profile'),'parameters':adapter_parameters(platform,key)},
-                    context={'timeout_seconds':5,'runtime_version_record':True},timeout=6,stage='runtime_version',
-                )
-            except Exception as exc:
-                value.setdefault('warnings',[]).append(f'{role} environment version probe failed: {type(exc).__name__}: {exc}')
-                continue
-            value.setdefault('environments',{})[role]={
-                **copy.deepcopy(resolved_platform.get(key) or {}),
-                **copy.deepcopy(snapshot),
-            }
+        refresh_environment_versions(
+            active_plan=self._active_plan,
+            platform=platform,
+            resolved_platform=resolved_platform,
+            value=value,
+            registry=self.registry,
+            invoke=self._invoke,
+        )
 
     @staticmethod
     def _version_text(value: object) -> str | None:
-        text=value.decode('utf-8','replace') if isinstance(value,(bytes,bytearray)) else str(value or '')
-        lines=[line.strip() for line in text.splitlines() if line.strip()]
-        return lines[-1][:500] if lines else None
+        return version_text(value)
 
     def _save_runtime_versions(self, run_dir: Path, value: dict) -> None:
-        atomic_json(run_dir/'config'/'runtime_versions.json',self._redact_diagnostic(value))
+        save_runtime_versions(run_dir, value, redact=self._redact_diagnostic)
 
     def prepare_process_for_environment(
         self,
@@ -254,124 +308,24 @@ class Orchestrator:
         report_path: str | Path | None = None,
         raise_on_failure: bool = True,
     ) -> dict:
-        """Execute an adapter-declared preflight plan with portable Core semantics."""
-        self.schemas.validate("backend_preflight_plan", preflight_plan)
-        rows: list[dict] = []
-        dependency_blocked = False
-        for declared in preflight_plan["probes"]:
-            probe_id = str(declared["id"])
-            phase = str(declared["phase"])
-            required = bool(declared["required"])
-            if dependency_blocked and phase == "model_compatibility":
-                rows.append({
-                    "id": probe_id,
-                    "phase": phase,
-                    "required": required,
-                    "status": "blocked",
-                    "duration_ms": 0,
-                    "error": "blocked by a required backend_dependency probe failure",
-                })
-                continue
-            started = time.monotonic()
-            process = copy.deepcopy(declared["process"])
-            process.setdefault("metadata", {}).update({
-                "role": "backend_preflight",
-                "probe_id": probe_id,
-                "probe_phase": phase,
-            })
-            row = {
-                "id": probe_id,
-                "phase": phase,
-                "required": required,
-                "status": "failed",
-                "duration_ms": 0,
-                "argv": list(process.get("argv") or []),
-            }
-            try:
-                wrapped, _warnings = self.prepare_process_for_environment(
-                    process,
-                    platform_spec=platform_spec,
-                    resolved_platform=resolved_platform,
-                    role="backend",
-                    base_patches=(
-                        ("device", resolved_platform.get("device_env_patch")),
-                        ("runtime", resolved_platform.get("runtime_env_patch")),
-                    ),
-                    context={"diagnostic": True, "preflight": True},
-                    timeout=5,
-                )
-                row["wrapped_argv"] = list(wrapped.get("argv") or [])
-                cp = self.pm.run(wrapped)
-
-                def dec(value):
-                    if value is None:
-                        return ""
-                    if isinstance(value, (bytes, bytearray)):
-                        return value.decode("utf-8", "replace")
-                    return str(value)
-
-                stdout = dec(cp.stdout)
-                stderr = dec(cp.stderr)
-                row.update({
-                    "returncode": int(cp.returncode),
-                    "stdout": stdout[-8000:],
-                    "stderr": stderr[-8000:],
-                })
-                if declared["result_format"] == "preflight_result":
-                    result = self._preflight_json_result(stdout)
-                    self.schemas.validate("preflight_probe_result", result)
-                    row["result"] = result
-                    process_passed = cp.returncode == 0
-                    result_passed = result["status"] == "passed"
-                    if process_passed != result_passed:
-                        row["error"] = (
-                            "preflight process/result status mismatch: "
-                            f"returncode={cp.returncode}, result.status={result['status']!r}"
-                        )
-                    elif result_passed:
-                        row["status"] = "passed"
-                    else:
-                        error = result["error"]
-                        row["error"] = f"{error['code']}: {error['message']}"
-                elif cp.returncode == 0:
-                    row["status"] = "passed"
-            except Exception as exc:
-                row["error"] = f"{type(exc).__name__}: {exc}"
-            finally:
-                row["duration_ms"] = max(0, int((time.monotonic() - started) * 1000))
-            if required and row["status"] != "passed" and phase == "backend_dependency":
-                dependency_blocked = True
-            rows.append(row)
-
-        failed = any(row["required"] and row["status"] != "passed" for row in rows)
-        report = {
-            "schema_version": "1.0",
-            "status": "failed" if failed else "passed",
-            "probes": rows,
-            "environment": str((resolved_platform.get("backend_environment") or {}).get("identity") or ""),
-            "executable_root": str((resolved_platform.get("backend_environment") or {}).get("executable_root") or ""),
-        }
-        self.schemas.validate("preflight_report", report)
-        if report_path is not None:
-            atomic_json(report_path, self._redact_diagnostic(report))
-        if failed and raise_on_failure:
-            raise self._backend_preflight_error(report)
-        return report
+        return execute_backend_preflight(
+            self,
+            preflight_plan,
+            platform_spec=platform_spec,
+            resolved_platform=resolved_platform,
+            report_path=report_path,
+            raise_on_failure=raise_on_failure,
+        )
 
     @staticmethod
     def _backend_preflight_error(report: dict) -> ProcessError:
-        failures = [
-            f"{row['id']}={row['status']}: "
-            f"{str(row.get('error') or row.get('stderr') or row.get('stdout') or 'probe failed')[-2000:]}"
-            for row in (report.get('probes') or [])
-            if row.get("required") and row.get("status") != "passed"
-        ]
-        return ProcessError("backend preflight failed: " + "; ".join(failures))
+        return preflight_error(report)
 
 
     @staticmethod
     def _confined_path(value: str | Path, root: str | Path, *, label: str, reject_symlink: bool=False) -> Path:
-        base=Path(root).resolve(); raw=Path(value)
+        base = Path(root).resolve()
+        raw = Path(value)
         if reject_symlink:
             lexical=raw.absolute()
             for candidate in (lexical,*lexical.parents):
@@ -386,10 +340,18 @@ class Orchestrator:
 
     @staticmethod
     def _verify_canonical_raw_result(result: dict, raw_root: Path) -> None:
-        ref=result.get('raw_result') or {}; path_value=ref.get('path')
-        if not path_value: raise CompatibilityError('CanonicalResult.raw_result.path is missing')
-        path=Orchestrator._confined_path(path_value,raw_root,label='CanonicalResult.raw_result',reject_symlink=True)
-        if not path.is_file(): raise CompatibilityError(f'CanonicalResult raw result is missing/unsafe: {path}')
+        ref = result.get('raw_result') or {}
+        path_value = ref.get('path')
+        if not path_value:
+            raise CompatibilityError('CanonicalResult.raw_result.path is missing')
+        path = Orchestrator._confined_path(
+            path_value,
+            raw_root,
+            label='CanonicalResult.raw_result',
+            reject_symlink=True,
+        )
+        if not path.is_file():
+            raise CompatibilityError(f'CanonicalResult raw result is missing/unsafe: {path}')
 
     @staticmethod
     def _verify_task_artifacts(task: dict, staging_root: Path) -> None:
@@ -439,7 +401,10 @@ class Orchestrator:
         The returned descriptors are the fresh execution-time descriptors and are
         used for process wrapping instead of stale planning snapshots.
         """
-        specs=plan['resolved']['specs']; deployment=specs['deployment']; platform=specs['platform']; expected=plan['resolved']['platform']
+        specs = plan['resolved']['specs']
+        deployment = specs['deployment']
+        platform = specs['platform']
+        expected = plan['resolved']['platform']
         eval_client=self.registry.get('environment',platform['evaluation_environment']['provider'])
         current_eval=self._invoke(eval_client,'resolve',{'profile':platform['evaluation_environment']['profile'],'parameters':adapter_parameters(platform,'evaluation_environment')},context={'timeout_seconds':3,'execution_revalidation':True},timeout=4)
         self._verify_environment_identity('evaluation environment',current_eval,expected['evaluation_environment'])
@@ -451,9 +416,11 @@ class Orchestrator:
 
         if deployment['management']['mode'] == 'managed':
             dev_client=self.registry.get('device',platform['device']['adapter'])
-            device_params=adapter_parameters(platform,'device'); runtime_params=adapter_parameters(platform,'runtime')
+            device_params = adapter_parameters(platform, 'device')
+            runtime_params = adapter_parameters(platform, 'runtime')
             current=self._invoke(dev_client,'probe',{'requested_devices':platform['device'].get('devices',[]),'parameters':device_params},context={'timeout_seconds':3,'execution_revalidation':True},timeout=4)
-            wanted={d['id'] for d in expected['device']['devices']}; got={d['id'] for d in current['devices']}
+            wanted = {device['id'] for device in expected['device']['devices']}
+            got = {device['id'] for device in current['devices']}
             if current['vendor'] != expected['device']['vendor'] or got != wanted:
                 raise CompatibilityError(f'device facts changed after planning: expected vendor/devices={expected["device"]["vendor"]}/{sorted(wanted)}, got={current["vendor"]}/{sorted(got)}')
             current_visibility=self._invoke(dev_client,'visibility',{'devices':[d['id'] for d in current['devices']],'descriptor':current,'parameters':device_params},context={'timeout_seconds':3,'execution_revalidation':True},timeout=4)['env_patch']
@@ -468,7 +435,8 @@ class Orchestrator:
                 raise CompatibilityError(f'runtime version changed after planning: expected {expected["runtime"].get("version")}, got {runtime.get("version")}')
             pair=device_runtime_compatibility(current,runtime)
             reports['device_runtime_pair']={'compatible':pair.compatible,'reasons':pair.reasons,'optional_misses':pair.optional_misses}
-            if not pair.compatible: raise CompatibilityError('; '.join(pair.reasons))
+            if not pair.compatible:
+                raise CompatibilityError('; '.join(pair.reasons))
             current_runtime_patch=self._invoke(rt_client,'resolve_environment',{'descriptor':runtime,'profile':platform['runtime'].get('profile'),'parameters':runtime_params},context={'timeout_seconds':3,'execution_revalidation':True},timeout=4)['env_patch']
             if current_runtime_patch != expected.get('runtime_env_patch',{}):
                 raise CompatibilityError('runtime EnvPatch changed after planning')
@@ -501,104 +469,43 @@ class Orchestrator:
         return redact_diagnostic(value, self.pm.secrets.redaction_values())
 
     def _error_record(self, exc: BaseException) -> dict:
-        record = {
-            'type': type(exc).__name__,
-            'code': str(getattr(exc, 'code', 'INTERNAL_ERROR')),
-            'message': str(exc),
-        }
-        if hasattr(exc, 'retryable'):
-            record['retryable'] = bool(getattr(exc, 'retryable'))
-        details = getattr(exc, 'details', None)
-        if isinstance(details, dict) and details:
-            record['details'] = copy.deepcopy(details)
-        return self._redact_diagnostic(record)
+        return error_record(exc, redact=self._redact_diagnostic)
 
     @staticmethod
     def _current_state(run_dir: Path) -> str | None:
-        path = run_dir / '.run' / 'status.json'
-        try:
-            obj = json_loads_strict(path.read_text(encoding='utf-8'))
-            state = obj.get('state')
-            return str(state) if state else None
-        except Exception:
-            return None
+        return current_state(run_dir)
 
     def _append_core_error(self, run_dir: Path, stage: str, exc: BaseException) -> None:
-        path = run_dir / 'logs' / 'core_error.log'
-        try:
-            rendered = ''.join(traceback.format_exception(type(exc), exc, exc.__traceback__))
-            rendered = redact_text(rendered, self.pm.secrets.redaction_values())
-            with path.open('a', encoding='utf-8') as f:
-                f.write(f"[{iso_now(self._active_plan)}] stage={stage}\n")
-                f.write(rendered)
-                if rendered and not rendered.endswith('\n'):
-                    f.write('\n')
-                f.write('\n')
-        except Exception:
-            # Diagnostics must never mask the failure they are trying to record.
-            pass
+        append_core_error(
+            run_dir,
+            stage,
+            exc,
+            timestamp=iso_now(self._active_plan),
+            redaction_values=self.pm.secrets.redaction_values(),
+        )
 
     def _log_tail(self, path: Path, *, max_lines: int = 40, max_chars: int = 8000, max_bytes: int = 65536) -> list[str]:
-        """Read a bounded tail without loading an arbitrarily large failure log."""
-        try:
-            if not path.is_file():
-                return []
-            with path.open('rb') as f:
-                f.seek(0, 2)
-                size = f.tell()
-                take = min(size, max(1, int(max_bytes)))
-                f.seek(size - take)
-                raw = f.read(take)
-            text = raw.decode('utf-8', errors='replace')
-            if take < size:
-                # The bounded read may begin in the middle of a line.
-                _, sep, rest = text.partition('\n')
-                if sep:
-                    text = rest
-            lines = text.splitlines()[-max_lines:]
-            text = '\n'.join(lines)
-            text = redact_text(text[-max_chars:], self.pm.secrets.redaction_values())
-            return text.splitlines()
-        except Exception:
-            return []
+        return log_tail(
+            path,
+            max_lines=max_lines,
+            max_chars=max_chars,
+            max_bytes=max_bytes,
+            redaction_values=self.pm.secrets.redaction_values(),
+        )
 
     def _failure_record(self, run_dir: Path, *, stage: str, failure: BaseException, cleanup: dict, backend_handle=None, evaluator_returncode=None) -> dict:
-        logs = {}
-        for key, rel in (
-            ('backend', Path('logs/backend.log')),
-            ('evaluator', Path('logs/evaluation.log')),
-            ('core', Path('logs/core_error.log')),
-        ):
-            path = run_dir / rel
-            if path.is_file():
-                logs[key] = {'path': rel.as_posix(), 'tail': self._log_tail(path)}
-        process = {}
-        if backend_handle is not None:
-            process['backend'] = {
-                'pid': backend_handle.pid,
-                'pgid': backend_handle.pgid,
-                'returncode': backend_handle.poll(),
-            }
-        if evaluator_returncode is not None:
-            process['evaluator'] = {'returncode': evaluator_returncode}
-        record = {
-            'schema_version': '1.0',
-            'run_id': run_dir.name,
-            'time': iso_now(self._active_plan),
-            'stage': stage,
-            'primary_error': self._error_record(failure),
-            'cleanup': cleanup,
-            'logs': logs,
-        }
-        if process:
-            record['process'] = process
-        secondary = getattr(failure, '_model_eval_cleanup_error', None)
-        if secondary is not None:
-            record.setdefault('secondary_errors', []).append({
-                'stage': 'PROCESS_CLEANUP',
-                **self._error_record(secondary),
-            })
-        return self._redact_diagnostic(record)
+        return failure_record(
+            run_dir,
+            stage=stage,
+            failure=failure,
+            cleanup=cleanup,
+            timestamp=iso_now(self._active_plan),
+            error_builder=self._error_record,
+            redact=self._redact_diagnostic,
+            redaction_values=self.pm.secrets.redaction_values(),
+            backend_handle=backend_handle,
+            evaluator_returncode=evaluator_returncode,
+        )
 
     def execute(self, plan: dict) -> Path:
         self.schemas.validate('execution_plan',plan)
@@ -613,15 +520,31 @@ class Orchestrator:
                 raise StaleProcessError(f"unresolved stale managed-process ownership records: {unresolved}")
             with self.resources.acquire(non_global_claims):
                 started_at=iso_now(plan)
-                run_dir=allocate_run_dir(self.results_root,plan); run_id=run_dir.name
-                self._persist_initial(run_dir,plan,started_at=started_at)
+                run_dir = allocate_run_dir(self.results_root, plan)
+                run_id = run_dir.name
+                backend_handle = None
+                failure: BaseException | None = None
+                failure_stage: str | None = None
+                backend_shutdown: dict | None = None
+                mode: str | None = None
+                evaluator_returncode: int | None = None
                 self._warning_events=[copy.deepcopy(x) for x in (plan.get('warnings') or [])]
-                if stale: atomic_json(run_dir/'.run'/'diagnostics'/'stale_process_recovery.json',stale)
-                self._status(run_dir,'CREATED'); self._status(run_dir,'PLANNED')
-                backend_handle=None; failure: BaseException | None=None; failure_stage: str | None=None
-                backend_shutdown: dict | None=None; mode: str | None=None; evaluator_returncode: int | None=None
                 try:
-                    specs=plan['resolved']['specs']; platform=specs['platform']; deployment=specs['deployment']; benchmark=specs['benchmark']; evaluation=specs['evaluation']; model=specs['model']; mode=deployment['management']['mode']
+                    self._persist_initial(run_dir,plan,started_at=started_at)
+                    if stale:
+                        atomic_json(
+                            run_dir / '.run' / 'diagnostics' / 'stale_process_recovery.json',
+                            stale,
+                        )
+                    self._status(run_dir, 'CREATED')
+                    self._status(run_dir, 'PLANNED')
+                    specs = plan['resolved']['specs']
+                    platform = specs['platform']
+                    deployment = specs['deployment']
+                    benchmark = specs['benchmark']
+                    evaluation = specs['evaluation']
+                    model = specs['model']
+                    mode = deployment['management']['mode']
                     offline=bool((plan['run_spec'].get('overrides') or {}).get('offline',False))
                     pdesc=self._revalidate_platform(plan,run_dir)
                     runtime_versions=self._runtime_versions_base(plan,platform,pdesc)
@@ -644,7 +567,8 @@ class Orchestrator:
                     if fp['protocol_fingerprint'] != task['protocol_fingerprint']:
                         raise CompatibilityError(f"binding protocol_fingerprint disagrees with FrameworkTaskArtifact: {fp['protocol_fingerprint']} != {task['protocol_fingerprint']}")
                     self._verify_task_artifacts(task,run_dir/'.run'/'task')
-                    self._status(run_dir,'TASK_READY'); self._status(run_dir,'EVALUATOR_PREFLIGHT')
+                    self._status(run_dir, 'TASK_READY')
+                    self._status(run_dir, 'EVALUATOR_PREFLIGHT')
                     evaluator=self.registry.get('evaluator',evaluation['framework']['adapter'])
                     runtime_versions['evaluator']={
                         'adapter':evaluation['framework']['adapter'],
@@ -659,21 +583,28 @@ class Orchestrator:
                     local_req={'schema_version':'1.0','requirements':[r for r in req.get('requirements',[]) if str(r.get('path','')).startswith('evaluation_environment.')]}
                     self.schemas.validate('requirement_set',local_req)
                     local_report=evaluate(local_req,facts_from_environment(pdesc['evaluation_environment'],'evaluation_environment'))
-                    if not local_report.compatible: raise CompatibilityError('evaluator preflight failed: ' + '; '.join(local_report.reasons))
+                    if not local_report.compatible:
+                        raise CompatibilityError(
+                            'evaluator preflight failed: ' + '; '.join(local_report.reasons)
+                        )
                     # Evaluators may provide a cheap process-level preflight that is
                     # executed inside the selected evaluation environment. This is
                     # deliberately before Backend startup so missing Python packages
                     # or framework dependencies fail without loading the model.
                     if 'plan_preflight' in (evaluator.identity.manifest.get('operations') or []):
                         preflight=self._invoke(evaluator,'plan_preflight',{'evaluation':evaluation,'task':task,'cache_root':str(self.cache_root)},context={'workspace':str(run_dir),'cache_root':str(self.cache_root),'offline':offline,'preflight':True},timeout=30)
-                        pre_proc=copy.deepcopy(preflight['process']); pre_proc.setdefault('metadata',{}).update({'role':'evaluator_preflight','run_id':run_id})
+                        pre_proc = copy.deepcopy(preflight['process'])
+                        pre_proc.setdefault('metadata', {}).update(
+                            {'role': 'evaluator_preflight', 'run_id': run_id}
+                        )
                         pre_wrapped,_=self.prepare_process_for_environment(
                             pre_proc,platform_spec=platform,resolved_platform=pdesc,role='evaluator',
                             context={'workspace':str(run_dir),'offline':offline,'preflight':True},timeout=5,
                         )
                         pre_cp=self.pm.run(pre_wrapped)
                         def _preflight_text(value):
-                            if value is None: return ''
+                            if value is None:
+                                return ''
                             return value.decode('utf-8','replace') if isinstance(value,(bytes,bytearray)) else str(value)
                         preflight_record={
                                 'returncode':pre_cp.returncode,
@@ -687,7 +618,8 @@ class Orchestrator:
                                 preflight_record['result']=probe_result
                                 runtime_versions['evaluator']['facts']=copy.deepcopy(probe_result.get('facts') or {})
                                 self._save_runtime_versions(run_dir,runtime_versions)
-                                process_passed=pre_cp.returncode==0; result_passed=probe_result['status']=='passed'
+                                process_passed = pre_cp.returncode == 0
+                                result_passed = probe_result['status'] == 'passed'
                                 if process_passed != result_passed:
                                     raise ProcessError(
                                         'evaluator preflight process/result status mismatch: '
@@ -705,10 +637,14 @@ class Orchestrator:
                     backend=self.registry.get('backend',deployment['backend']['adapter'])
                     start_input={'model':model,'deployment':deployment,'platform':pdesc,'endpoint':plan['resolved'].get('endpoint',{}),'log_path':str(run_dir/'logs'/'backend.log'),'network_policy':'offline' if offline else 'online'}
                     start_plan=self._invoke(backend,'plan_start',start_input,context={'workspace':str(run_dir), 'offline':offline},timeout=5)
-                    attach=start_plan['attach']; backend_shutdown=copy.deepcopy(start_plan.get('shutdown'))
+                    attach = start_plan['attach']
+                    backend_shutdown = copy.deepcopy(start_plan.get('shutdown'))
                     if mode=='managed':
                         self._status(run_dir,'SERVICE_STARTING')
-                        proc=copy.deepcopy(start_plan['process']); proc.setdefault('metadata',{}).update({'role':'backend','run_id':run_id})
+                        proc = copy.deepcopy(start_plan['process'])
+                        proc.setdefault('metadata', {}).update(
+                            {'role': 'backend', 'run_id': run_id}
+                        )
                         p=pdesc
                         proc,_=self.prepare_process_for_environment(
                             proc,platform_spec=platform,resolved_platform=p,role='backend',
@@ -754,16 +690,25 @@ class Orchestrator:
                         for claim in plan['resources']:
                             if claim['kind']=='port': self.resources.check_port(str(claim.get('host') or '127.0.0.1'),int(claim['id']))
                         backend_handle=self.pm.start(proc)
-                    auth_ref=(attach.get('auth') or {}).get('secret_ref'); auth_value=self.pm.secrets.resolve(auth_ref) if auth_ref else None
+                    auth_ref = (attach.get('auth') or {}).get('secret_ref')
+                    auth_value = self.pm.secrets.resolve(auth_ref) if auth_ref else None
                     ready=float((start_plan.get('readiness') or {}).get('timeout_seconds',30 if mode!='managed' else 900))
-                    service=self._probe_service_until_ready(backend,attach,auth_value,ready,backend_handle); self._status(run_dir,'SERVICE_READY')
+                    service = self._probe_service_until_ready(
+                        backend,
+                        attach,
+                        auth_value,
+                        ready,
+                        backend_handle,
+                    )
+                    self._status(run_dir, 'SERVICE_READY')
                     if mode!='managed':
                         runtime_versions['backend']={'adapter':deployment['backend']['adapter'],'adapter_version':backend.identity.version,'management':mode}
                     self._save_runtime_versions(run_dir,runtime_versions)
                     eval_env=pdesc['evaluation_environment']
                     eval_facts=merge_fact_sets(facts_from_service(service),facts_from_environment(eval_env,'evaluation_environment'))
                     report=evaluate(req,eval_facts)
-                    if not report.compatible: raise CompatibilityError('; '.join(report.reasons))
+                    if not report.compatible:
+                        raise CompatibilityError('; '.join(report.reasons))
                     self._verify_task_artifacts(task,run_dir/'.run'/'task')
                     # Strict datasets are verified again immediately before evaluator planning/execution.
                     final_verified=self._invoke(dataset_client,'verify',{'artifact':dataset,'benchmark':benchmark},context={'offline':True,'final_verification':True},timeout=30)
@@ -774,14 +719,25 @@ class Orchestrator:
                     if final_artifact.get('fingerprint') != dataset.get('fingerprint'):
                         raise CompatibilityError('dataset artifact fingerprint changed after task binding')
                     ep=self._invoke(evaluator,'plan_evaluate',{'service':service,'task':task,'evaluation':evaluation,'cache_root':str(self.cache_root),'output_root':str(run_dir/'.run'/'framework_output'),'workspace':str(run_dir),'log_path':str(run_dir/'logs'/'evaluation.log'),'network_policy':'offline' if offline else 'online'},context={'workspace':str(run_dir),'cache_root':str(self.cache_root),'offline':offline},timeout=30)
-                    raw_result_root=self._confined_path(ep['raw_result_root'],run_dir/'.run'/'framework_output',label='evaluator raw_result_root'); ep['raw_result_root']=str(raw_result_root)
-                    eval_proc=ep['process']; eval_proc.setdefault('metadata',{}).update({'role':'evaluator','run_id':run_id})
+                    raw_result_root = self._confined_path(
+                        ep['raw_result_root'],
+                        run_dir / '.run' / 'framework_output',
+                        label='evaluator raw_result_root',
+                    )
+                    ep['raw_result_root'] = str(raw_result_root)
+                    eval_proc = ep['process']
+                    eval_proc.setdefault('metadata', {}).update(
+                        {'role': 'evaluator', 'run_id': run_id}
+                    )
                     eval_proc,_=self.prepare_process_for_environment(
                         eval_proc,platform_spec=platform,resolved_platform=pdesc,role='evaluator',
                         context={'workspace':str(run_dir),'offline':offline},timeout=5,
                     )
-                    self._status(run_dir,'EVALUATING'); cp=self.pm.run(eval_proc); evaluator_returncode=cp.returncode
-                    if cp.returncode!=0: raise ProcessError(f"evaluator exited with rc={cp.returncode}")
+                    self._status(run_dir, 'EVALUATING')
+                    cp = self.pm.run(eval_proc)
+                    evaluator_returncode = cp.returncode
+                    if cp.returncode != 0:
+                        raise ProcessError(f"evaluator exited with rc={cp.returncode}")
                     self._status(run_dir,'NORMALIZING')
                     result_model=str(model.get('experiment_id') or (model.get('metadata') or {}).get('experiment_id') or model['id'])
                     result=self._invoke(evaluator,'normalize',{'raw_result_root':ep['raw_result_root'],'task':task,'run_metadata':{'run_id':run_id,'model':result_model,'benchmark':benchmark['id']}},context={'workspace':str(run_dir)},timeout=20)
@@ -791,108 +747,33 @@ class Orchestrator:
                     task_metrics=task.get('metrics') or {}
                     if task_metrics.get('namespace')=='canonical':
                         missing=[name for name in (benchmark.get('metrics') or []) if name not in (result.get('metrics') or {})]
-                        if missing: raise CompatibilityError(f'CanonicalResult is missing BenchmarkSpec metrics: {missing}')
+                        if missing:
+                            raise CompatibilityError(
+                                f'CanonicalResult is missing BenchmarkSpec metrics: {missing}'
+                            )
                     self._verify_canonical_raw_result(result,raw_result_root)
                     result['metadata']={**(result.get('metadata') or {}),'started_at':started_at,'finished_at':iso_now(plan),'timezone':getattr(plan_timezone(plan),'key','Asia/Shanghai')}
-                    result=publish_result(run_dir,raw_result_root,result)
+                    result=publish_result(run_dir,raw_result_root,result,schemas=self.schemas)
                 except BaseException as exc:
                     failure=exc
-                    failure_stage=self._current_state(run_dir) or 'EXECUTION'
+                    failure_stage=self._current_state(run_dir) or 'INITIALIZING'
                     self._append_core_error(run_dir,failure_stage,exc)
                     try: self._status(run_dir,'FAILED',error=self._error_record(exc),failure_stage=failure_stage)
                     except Exception: pass
                 finally:
-                    # Lifecycle status is diagnostic.  Cleanup itself must not be
-                    # interrupted or turned into a new primary failure by status I/O.
-                    self._status_best_effort(run_dir,'CLEANING')
-
-                    failure_cleanup_status = None
-                    if failure is not None:
-                        details = getattr(failure, 'details', None)
-                        if isinstance(details, dict):
-                            failure_cleanup_status = details.get('cleanup_status')
-                        failure_cleanup_status = failure_cleanup_status or getattr(failure, '_model_eval_cleanup_status', None)
-                    cleanup_report={
-                        'schema_version':'1.0',
-                        'status':'incomplete' if failure_cleanup_status == 'incomplete' else 'clean',
-                        'backend': {'status':'not_owned' if mode in {'attached','external'} else 'not_started'},
-                    }
-                    if backend_handle is not None:
-                        shutdown=backend_shutdown or {'strategy':'signal','signal':'SIGTERM','timeout_seconds':10.0}
-                        try:
-                            cleanup_report['backend']=self.pm.stop_with_report(
-                                backend_handle,
-                                graceful_signal=str(shutdown.get('signal') or 'SIGTERM'),
-                                grace_seconds=float(shutdown.get('timeout_seconds') or 10.0),
-                                kill_seconds=3.0,
-                            )
-                        except BaseException as cleanup_internal_exc:
-                            # A cleanup implementation failure is always secondary to
-                            # an existing run failure.  Treat ownership as unknown and
-                            # hard-stop subsequent batch work rather than guessing.
-                            cleanup_report['backend']={
-                                'status':'incomplete',
-                                'pid':backend_handle.pid,
-                                'pgid':backend_handle.pgid,
-                                'owned_process_group_remaining':True,
-                                'secondary_errors':[self._error_record(cleanup_internal_exc)],
-                            }
-                            self._append_core_error(run_dir,'CLEANING',cleanup_internal_exc)
-                        if cleanup_report['backend'].get('status') != 'clean':
-                            cleanup_report['status'] = 'incomplete'
-                            cleanup_exc=CleanupCriticalError(
-                                f"owned backend process group remained or ownership became ambiguous after bounded cleanup: "
-                                f"pid={backend_handle.pid} pgid={backend_handle.pgid}"
-                            )
-                            cleanup_report.setdefault('secondary_errors',[]).append(self._error_record(cleanup_exc))
-                            if failure is None:
-                                failure=cleanup_exc; failure_stage='CLEANING'
-                                self._append_core_error(run_dir,'CLEANING',cleanup_exc)
-                            else:
-                                # Preserve the primary error, but make cleanup safety
-                                # available even if failure.json cannot later be read.
-                                try:
-                                    setattr(failure,'_model_eval_cleanup_status','incomplete')
-                                except Exception:
-                                    pass
-                                if isinstance(failure, ModelEvalError):
-                                    failure.details.setdefault('cleanup_status','incomplete')
-                    secondary_cleanup=getattr(failure,'_model_eval_cleanup_error',None) if failure is not None else None
-                    if secondary_cleanup is not None:
-                        cleanup_report.setdefault('secondary_errors',[]).append(self._error_record(secondary_cleanup))
-                    if failure is not None:
-                        try:
-                            atomic_json(run_dir/'failure.json',self._failure_record(
-                                run_dir,stage=failure_stage or 'UNKNOWN',failure=failure,cleanup=cleanup_report,
-                                backend_handle=backend_handle,evaluator_returncode=evaluator_returncode,
-                            ))
-                        except Exception:
-                            pass
-                    terminal={
-                        'outcome':'success' if failure is None else 'failed',
-                        'started_at':started_at,
-                        'finished_at':iso_now(plan),
-                        'timezone':getattr(plan_timezone(plan),'key','Asia/Shanghai'),
-                        'cleanup':self._redact_diagnostic(cleanup_report),
-                    }
-                    if self._warning_events:
-                        terminal['warnings']=self._redact_diagnostic(self._warning_events)
-                    if failure is not None:
-                        terminal['error']=self._error_record(failure)
-
-                    if failure is None:
-                        self._status_best_effort(run_dir,'SUCCEEDED')
-                    else:
-                        self._status_best_effort(run_dir,'FINALIZED',outcome='failed',error=self._error_record(failure),failure_stage=failure_stage or 'UNKNOWN')
-                    try:
-                        atomic_json(run_dir/'terminal.json',terminal)
-                    except Exception as finalize_exc:
-                        self._append_core_error(run_dir,'FINALIZING',finalize_exc)
-                        if failure is None:
-                            failure=ProcessError(f"could not save terminal.json: {finalize_exc}")
-                            failure_stage='FINALIZING'
-                    if failure is None:
-                        shutil.rmtree(run_dir/'.run',ignore_errors=True)
+                    failure, failure_stage = finalize_run(
+                        self,
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        plan=plan,
+                        mode=mode,
+                        started_at=started_at,
+                        failure=failure,
+                        failure_stage=failure_stage,
+                        backend_handle=backend_handle,
+                        backend_shutdown=backend_shutdown,
+                        evaluator_returncode=evaluator_returncode,
+                    )
                 if failure is not None:
                     if isinstance(failure, ModelEvalError):
                         failure.details.setdefault('run_dir',str(run_dir))

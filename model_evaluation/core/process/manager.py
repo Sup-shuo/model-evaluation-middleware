@@ -13,87 +13,18 @@ from typing import IO
 from model_evaluation.core.errors import ModelEvalError, ProcessError
 from model_evaluation.core.identifiers import stable_id
 from model_evaluation.core.process.env import apply_env_patch
+from model_evaluation.core.process.procfs import (
+    linux_boot_id as _linux_boot_id,
+    proc_group_members as _proc_group_members,
+    proc_group_snapshot as _proc_group_snapshot,
+    proc_pgid as _proc_pgid,
+    proc_sid as _proc_sid,
+    proc_start_ticks as _proc_start_ticks,
+)
+from model_evaluation.core.process.recovery import recover_stale_managed
 from model_evaluation.core.schema.validator import SchemaStore
 from model_evaluation.core.security import execution_subprocess_env
 from model_evaluation.core.serialization import json_dumps_strict, json_loads_strict
-
-
-def _proc_start_ticks(pid: int) -> int | None:
-    try:
-        raw = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
-        tail = raw[raw.rfind(")") + 2 :].split()
-        return int(tail[19])
-    except (OSError, ValueError, IndexError):
-        return None
-
-
-def _proc_pgid(pid: int) -> int | None:
-    try:
-        return os.getpgid(pid)
-    except (OSError, ProcessLookupError):
-        return None
-
-
-def _proc_sid(pid: int) -> int | None:
-    try:
-        return os.getsid(pid)
-    except (OSError, ProcessLookupError):
-        return None
-
-
-def _linux_boot_id() -> str | None:
-    """Return the current Linux boot identity used to scope stale ownership records."""
-    try:
-        value = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="utf-8").strip()
-        return value or None
-    except OSError:
-        return None
-
-
-def _proc_group_snapshot(pgid: int | None) -> tuple[dict[int, int], dict[int, int], bool]:
-    """Return (live, zombies, complete) for one observable Linux process group.
-
-    A zombie cannot execute or retain accelerator/runtime resources, but it can
-    keep ``killpg(pgid, 0)`` successful until the container's PID 1 reaps it.
-    The completeness flag keeps cleanup fail-closed when procfs cannot be
-    inspected reliably.
-    """
-    if pgid is None:
-        return {}, {}, True
-    live: dict[int, int] = {}
-    zombies: dict[int, int] = {}
-    try:
-        entries = list(Path("/proc").iterdir())
-    except OSError:
-        return live, zombies, False
-    complete = True
-    for entry in entries:
-        if not entry.name.isdigit():
-            continue
-        try:
-            raw = (entry / "stat").read_text(encoding="utf-8")
-            tail = raw[raw.rfind(")") + 2 :].split()
-            if int(tail[2]) != int(pgid):
-                continue
-            target = zombies if tail[0] == "Z" else live
-            target[int(entry.name)] = int(tail[19])
-        except (FileNotFoundError, ProcessLookupError):
-            # Normal procfs race: the process disappeared while enumerating.
-            continue
-        except (OSError, ValueError, IndexError):
-            complete = False
-    return live, zombies, complete
-
-
-def _proc_group_members(pgid: int | None) -> dict[int, int]:
-    """Return {pid: start_ticks} for live observable members of a Linux group.
-
-    This is cleanup ownership evidence only.  It never enumerates accelerator
-    processes and never signals processes merely because they use a device.
-    """
-    live, _zombies, _complete = _proc_group_snapshot(pgid)
-    return live
-
 
 @dataclass
 class ProcessHandle:
@@ -154,9 +85,12 @@ class ProcessManager:
     def _stdio(self, config: dict | None, *, stream: str):
         config = config or {"mode": "inherit"}
         mode = config.get("mode", "inherit")
-        if mode == "inherit": return None, None
-        if mode == "capture": return subprocess.PIPE, None
-        if mode == "merge_stdout" and stream == "stderr": return subprocess.STDOUT, None
+        if mode == "inherit":
+            return None, None
+        if mode == "capture":
+            return subprocess.PIPE, None
+        if mode == "merge_stdout" and stream == "stderr":
+            return subprocess.STDOUT, None
         if mode == "file":
             path = Path(config["path"]).resolve()
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -410,7 +344,8 @@ class ProcessManager:
 
     @staticmethod
     def _group_alive(pgid: int | None) -> bool:
-        if pgid is None: return False
+        if pgid is None:
+            return False
         try:
             os.killpg(pgid, 0)
         except ProcessLookupError:
@@ -431,15 +366,27 @@ class ProcessManager:
 
     @staticmethod
     def _direct_stop(proc: subprocess.Popen, *, grace_seconds: float, kill_seconds: float) -> None:
-        if proc.poll() is not None: return
-        try: proc.terminate()
-        except ProcessLookupError: return
-        try: proc.wait(timeout=grace_seconds); return
-        except subprocess.TimeoutExpired: pass
-        try: proc.kill()
-        except ProcessLookupError: return
-        try: proc.wait(timeout=kill_seconds)
-        except subprocess.TimeoutExpired as exc: raise ProcessError(f"process did not terminate: pid={proc.pid}") from exc
+        if proc.poll() is not None:
+            return
+        try:
+            proc.terminate()
+        except ProcessLookupError:
+            return
+        try:
+            proc.wait(timeout=grace_seconds)
+            return
+        except subprocess.TimeoutExpired:
+            pass
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            return
+        try:
+            proc.wait(timeout=kill_seconds)
+        except subprocess.TimeoutExpired as exc:
+            raise ProcessError(
+                f"process did not terminate: pid={proc.pid}"
+            ) from exc
 
     @staticmethod
     def _signal_number(name: str) -> int:
@@ -697,60 +644,14 @@ class ProcessManager:
             raise err
 
     def recover_stale_managed(self, *, grace_seconds: float = 1.0, kill_seconds: float = 1.0) -> list[dict]:
-        """Recover processes left by a crashed Core instance conservatively.
-
-        A stale record is actionable only when Linux start ticks and process
-        group identity still match the recorded Core-owned session.  Any
-        ambiguity is reported instead of risking a signal to an unrelated
-        process group.
-        """
-        results: list[dict] = []
-        if not self.ownership_root: return results
-        for path in sorted(self.ownership_root.glob("process-*.json")):
-            if path.is_symlink():
-                results.append({"path":str(path),"status":"invalid","error":"ownership record is a symlink"}); continue
-            try:
-                rec=json_loads_strict(path.read_text(encoding="utf-8")); pid=int(rec["pid"]); pgid=int(rec.get("pgid") or pid); expected=rec.get("start_ticks")
-            except Exception as exc:
-                results.append({"path":str(path),"status":"invalid","error":str(exc)}); continue
-            recorded_boot=rec.get("boot_id"); current_boot=_linux_boot_id()
-            if current_boot and not recorded_boot:
-                # Legacy records are not boot-scoped.  Never signal from them on
-                # a host where boot identity is available; require one manual
-                # inspection instead of risking a cross-reboot PID/PGID match.
-                results.append({"path":str(path),"pid":pid,"pgid":pgid,"status":"invalid","error":"ownership record is missing boot_id"})
-                continue
-            if recorded_boot and current_boot and recorded_boot != current_boot:
-                # PID/start-ticks are only meaningful within one Linux boot.
-                # A record from an older boot can be discarded without signalling anything.
-                path.unlink(missing_ok=True)
-                results.append({"path":str(path),"pid":pid,"pgid":pgid,"status":"expired_boot"})
-                continue
-            current=_proc_start_ticks(pid)
-            if current is None:
-                # The leader is gone.  Only discard ownership if the recorded
-                # group is also gone.  A surviving group is ambiguous because
-                # the leader start-ticks can no longer prove group identity.
-                if self._group_alive(pgid):
-                    results.append({"path":str(path),"pid":pid,"pgid":pgid,"status":"orphaned_group_ambiguous"}); continue
-                path.unlink(missing_ok=True); results.append({"path":str(path),"pid":pid,"status":"gone"}); continue
-            current_pgid=_proc_pgid(pid)
-            # start_new_session=True creates a dedicated group whose leader is the child PID.
-            if expected is None or current != expected or current_pgid is None or pgid != current_pgid or pgid != pid:
-                results.append({"path":str(path),"pid":pid,"status":"identity_mismatch","recorded_pgid":pgid,"current_pgid":current_pgid}); continue
-            try:
-                os.killpg(pgid,signal.SIGTERM)
-                deadline=time.monotonic()+grace_seconds
-                while time.monotonic()<deadline and self._group_alive(pgid): time.sleep(0.05)
-                if self._group_alive(pgid):
-                    os.killpg(pgid,signal.SIGKILL); deadline=time.monotonic()+kill_seconds
-                    while time.monotonic()<deadline and self._group_alive(pgid): time.sleep(0.05)
-                if self._group_alive(pgid):
-                    results.append({"path":str(path),"pid":pid,"status":"cleanup_failed"}); continue
-            except ProcessLookupError:
-                pass
-            path.unlink(missing_ok=True); results.append({"path":str(path),"pid":pid,"status":"recovered"})
-        return results
+        return recover_stale_managed(
+            self,
+            grace_seconds=grace_seconds,
+            kill_seconds=kill_seconds,
+            boot_id_fn=_linux_boot_id,
+            start_ticks_fn=_proc_start_ticks,
+            pgid_fn=_proc_pgid,
+        )
 
     def _close(self, handle: ProcessHandle) -> None:
         for h in (handle.stdout_handle, handle.stderr_handle, handle.process.stdout, handle.process.stderr):

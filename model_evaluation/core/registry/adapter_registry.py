@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import sys
 import subprocess
 import uuid
@@ -10,6 +9,12 @@ from pathlib import Path
 
 from model_evaluation.core.errors import AdapterExecutionError, AdapterProtocolError, ConfigError
 from model_evaluation.core.registry.operation_contracts import validate_operation_input, validate_operation_output
+from model_evaluation.core.registry.plugin_discovery import (
+    adapter_search_roots,
+    filesystem_candidates,
+    index_candidates,
+    installed_plugin_candidates,
+)
 from model_evaluation.core.schema.validator import SchemaStore
 from model_evaluation.core.security import adapter_subprocess_env, redact_text
 from model_evaluation.core.serialization import json_dumps_strict, json_loads_strict
@@ -23,6 +28,12 @@ SUPPORTED_SHARED_SCHEMAS = {
     "capability_set":"1.0", "env_patch":"1.0", "backend_start_plan":"1.1",
     "backend_preflight_plan":"1.0", "preflight_probe_result":"1.0",
 }
+
+
+def _adapter_process_env() -> dict[str, str]:
+    env = adapter_subprocess_env()
+    env["MODEL_EVAL_CONTROLLER_PYTHON"] = str(Path(sys.executable).resolve())
+    return env
 
 def _validate_adapter_name(name: str) -> None:
     if not name or "/" in name or "\\" in name or name in {".",".."}:
@@ -77,7 +88,7 @@ class AdapterClient:
                 stderr=subprocess.PIPE,
                 timeout=timeout or self.default_timeout,
                 check=False,
-                env=adapter_subprocess_env(),
+                env=_adapter_process_env(),
             )
         except subprocess.TimeoutExpired as exc:
             raise AdapterProtocolError(
@@ -116,31 +127,50 @@ class AdapterClient:
         return output
 
 class AdapterRegistry:
-    def __init__(self, root: str | Path, schemas: SchemaStore, *, manifest_timeout: float = 1.0, discovery_timeout: float = 5.0):
+    def __init__(
+        self,
+        root: str | Path,
+        schemas: SchemaStore,
+        *,
+        manifest_timeout: float = 1.0,
+        discovery_timeout: float = 5.0,
+        isolated_root: bool = False,
+    ):
         self.root = Path(root).resolve()
         self.schemas = schemas
         self.manifest_timeout = manifest_timeout
         self.discovery_timeout = discovery_timeout
+        self.isolated_root = isolated_root
         self._items: dict[tuple[str, str], AdapterIdentity] = {}
+        self._candidates = None
+
+    def _candidate_index(self):
+        if self._candidates is None:
+            roots = (
+                [(self.root, f"checked-root:{self.root}")]
+                if self.isolated_root
+                else adapter_search_roots(self.root)
+            )
+            candidates = filesystem_candidates(roots, VALID_KINDS)
+            if not self.isolated_root:
+                candidates.extend(installed_plugin_candidates(VALID_KINDS))
+            self._candidates = index_candidates(candidates)
+        return self._candidates
 
     def discover(self) -> dict[tuple[str, str], AdapterIdentity]:
         found: dict[tuple[str, str], AdapterIdentity] = {}
-        deadline=time.monotonic()+self.discovery_timeout
-        for kind_dir in sorted(self.root.iterdir() if self.root.is_dir() else []):
-            if not kind_dir.is_dir() or kind_dir.name not in VALID_KINDS:
-                continue
-            for impl_dir in sorted(p for p in kind_dir.iterdir() if p.is_dir()):
-                entry = impl_dir / "adapter"
-                if not entry.is_file() or not os.access(entry, os.X_OK):
-                    continue
-                remaining=deadline-time.monotonic()
-                if remaining <= 0:
-                    raise AdapterProtocolError("adapter discovery exceeded global bounded timeout")
-                identity = self._load_identity(kind_dir.name, impl_dir.name, entry, manifest_timeout=min(self.manifest_timeout,remaining))
-                key = (identity.kind, identity.name)
-                if key in found:
-                    raise ConfigError(f"duplicate adapter: {key[0]}/{key[1]}")
-                found[key] = identity
+        deadline = time.monotonic() + self.discovery_timeout
+        for key, candidate in sorted(self._candidate_index().items()):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise AdapterProtocolError("adapter discovery exceeded global bounded timeout")
+            identity = self._load_identity(
+                candidate.kind,
+                candidate.name,
+                candidate.entry,
+                manifest_timeout=min(self.manifest_timeout, remaining),
+            )
+            found[key] = identity
         self._items = found
         return dict(found)
 
@@ -167,7 +197,7 @@ class AdapterRegistry:
         try:
             proc = subprocess.run(
                 [str(entry), "manifest"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                timeout=timeout or self.manifest_timeout, check=False, env=adapter_subprocess_env()
+                timeout=timeout or self.manifest_timeout, check=False, env=_adapter_process_env()
             )
         except subprocess.TimeoutExpired as exc:
             raise AdapterProtocolError(f"adapter manifest timed out: {entry}") from exc
@@ -181,10 +211,11 @@ class AdapterRegistry:
     def exists(self, kind: str, name: str) -> bool:
         if kind not in VALID_KINDS:
             return False
-        try: _validate_adapter_name(name)
-        except AdapterProtocolError: return False
-        entry=self.root / kind / name / "adapter"
-        return entry.is_file() and os.access(entry, os.X_OK)
+        try:
+            _validate_adapter_name(name)
+        except AdapterProtocolError:
+            return False
+        return (kind, name) in self._candidate_index()
 
     def get(self, kind: str, name: str) -> AdapterClient:
         key = (kind, name)
@@ -193,10 +224,10 @@ class AdapterRegistry:
             if kind not in VALID_KINDS:
                 raise ConfigError(f"invalid adapter kind: {kind}")
             _validate_adapter_name(name)
-            entry = self.root / kind / name / "adapter"
-            if not entry.is_file() or not os.access(entry, os.X_OK):
+            candidate = self._candidate_index().get(key)
+            if candidate is None:
                 raise ConfigError(f"adapter not found: {kind}/{name}")
-            identity = self._load_identity(kind, name, entry)
+            identity = self._load_identity(kind, name, candidate.entry)
             self._items[key] = identity
         return AdapterClient(identity, self.schemas)
 

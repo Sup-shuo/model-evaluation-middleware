@@ -13,14 +13,7 @@ sys.path.insert(0, str(ROOT))
 
 from model_evaluation.core.matrix import MatrixExecutor
 from model_evaluation.core.result_relocation import ResultRelocationMap, load_result_relocation
-
-
-class _CanonicalSchemas:
-    def validate(self, name: str, obj: object) -> None:
-        if name != "canonical_result":
-            raise AssertionError(f"unexpected schema: {name}")
-        if not isinstance(obj, dict) or obj.get("schema_version") != "1.0":
-            raise ValueError("invalid result")
+from model_evaluation.core.schema.validator import SchemaStore
 
 
 def _plan(*, plan_id: str = "plan-1", timezone_name: str | None = None) -> dict:
@@ -45,23 +38,26 @@ def _plan(*, plan_id: str = "plan-1", timezone_name: str | None = None) -> dict:
 
 
 def _result(run_id: str) -> dict:
+    summary = {
+        "accuracy": {"value": 0.75, "stderr": 0.02, "higher_is_better": True}
+    }
     return {
         "schema_version": "1.0",
         "run_id": run_id,
         "model": "model-catalog-entry",
         "benchmark": "bbh",
         "framework": "lm_eval",
-        "metrics": {
-            "accuracy": {"value": 0.75, "stderr": 0.02, "higher_is_better": True}
+        "metrics": summary,
+        "raw_result": {
+            "path": "raw/framework_result.json",
+            "media_type": "application/json",
         },
-        # Neither this referenced file nor a SHA manifest is required by Batch.
-        "raw_result": {"path": "raw/framework_result.json"},
         "breakdowns": {
             "summary": {
                 "id": "bbh",
                 "kind": "group",
                 "metric_namespace": "canonical",
-                "metrics": {"accuracy": {"value": 0.75}},
+                "metrics": summary,
             },
             "groups": {
                 "bbh": {
@@ -86,27 +82,61 @@ def _result(run_id: str) -> dict:
     }
 
 
+def _metrics(result: dict) -> dict:
+    breakdowns = result["breakdowns"]
+    return {
+        "schema_version": "1.0",
+        "run_id": result["run_id"],
+        "model": result["model"],
+        "benchmark": result["benchmark"],
+        "framework": result["framework"],
+        "summary": result["metrics"],
+        "groups": breakdowns["groups"],
+        "tasks": breakdowns["tasks"],
+    }
+
+
+def _terminal(run_id: str) -> dict:
+    return {
+        "schema_version": "1.0",
+        "run_id": run_id,
+        "outcome": "success",
+        "started_at": "2026-01-01T08:00:00+08:00",
+        "finished_at": "2026-01-01T08:01:00+08:00",
+        "timezone": "Asia/Shanghai",
+        "cleanup": {"status": "clean", "backend": {"status": "clean"}},
+        "warnings": [],
+    }
+
+
 def _write_json(path: Path, value: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value), encoding="utf-8")
+
+
+def _write_product(run_dir: Path) -> None:
+    result = _result(run_dir.name)
+    _write_json(run_dir / "result.json", result)
+    _write_json(run_dir / "metrics.json", _metrics(result))
+    _write_json(run_dir / "terminal.json", _terminal(run_dir.name))
+    _write_json(run_dir / "config" / "run_config.json", {"plan_id": "plan-1"})
+    _write_json(run_dir / "raw" / "framework_result.json", {})
 
 
 def _executor(results_root: Path) -> MatrixExecutor:
     executor = object.__new__(MatrixExecutor)
     executor.results_root = results_root.resolve()
     executor.result_relocation = ResultRelocationMap(executor.results_root)
-    executor.app = SimpleNamespace(schemas=_CanonicalSchemas())
+    executor.app = SimpleNamespace(schemas=SchemaStore(ROOT / "model_evaluation" / "schemas"))
     return executor
 
 
 class BatchProductTests(unittest.TestCase):
-    def test_new_run_product_is_consumed_without_sha_or_raw_file(self) -> None:
+    def test_new_run_product_is_consumed_without_sha_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td).resolve()
             run_dir = root / "run-new"
-            _write_json(run_dir / "result.json", _result(run_dir.name))
-            _write_json(run_dir / "terminal.json", {"outcome": "success", "warnings": []})
-            _write_json(run_dir / "config" / "run_config.json", {"plan_id": "plan-1"})
+            _write_product(run_dir)
             (run_dir / "SHA256SUMS").write_text("intentionally stale\n", encoding="utf-8")
 
             ok, reason, result = _executor(root)._validate_success_record(
@@ -116,6 +146,24 @@ class BatchProductTests(unittest.TestCase):
 
         self.assertTrue(ok, reason)
         self.assertEqual(result["metrics"]["accuracy"]["value"], 0.75)
+
+    def test_new_run_product_rejects_result_metrics_disagreement(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td).resolve()
+            run_dir = root / "run-new"
+            _write_product(run_dir)
+            metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+            metrics["summary"]["accuracy"]["value"] = 0.1
+            _write_json(run_dir / "metrics.json", metrics)
+
+            ok, reason, result = _executor(root)._validate_success_record(
+                {"run_dir": str(run_dir), "result_path": str(run_dir / "result.json")},
+                _plan(),
+            )
+
+        self.assertFalse(ok)
+        self.assertIn("summary metrics", reason)
+        self.assertIsNone(result)
 
     def test_legacy_run_product_supports_relocation_without_sha(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -145,26 +193,24 @@ class BatchProductTests(unittest.TestCase):
 
     def test_batch_id_uses_system_timezone_and_collision_suffix(self) -> None:
         instant = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-        self.assertEqual(MatrixExecutor._batch_id({"plans": [_plan()]}, when=instant), "20260101-080000")
+        self.assertEqual(MatrixExecutor._batch_id({"plans": [_plan()]}, when=instant), "260101-0800")
         matrix = {"plans": [_plan(timezone_name="America/Los_Angeles")]}
-        self.assertEqual(MatrixExecutor._batch_id(matrix, when=instant), "20251231-160000")
+        self.assertEqual(MatrixExecutor._batch_id(matrix, when=instant), "251231-1600")
 
         with tempfile.TemporaryDirectory() as td:
             executor = _executor(Path(td))
-            first = Path(td) / "_batches" / "20251231-160000"
+            first = Path(td) / "_batches" / "251231-1600"
             first.mkdir(parents=True)
             allocated = executor._allocate_batch_dir(matrix, when=instant)
-            self.assertEqual(allocated.name, "20251231-160000-2")
+            self.assertEqual(allocated.name, "251231-1600-2")
 
     def test_finalize_writes_only_lightweight_public_product_and_detail_tables(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td).resolve()
             run_dir = root / "run-new"
-            batch_dir = root / "_batches" / "20260101-080000"
+            batch_dir = root / "_batches" / "260101-0800"
             batch_dir.mkdir(parents=True)
-            _write_json(run_dir / "result.json", _result(run_dir.name))
-            _write_json(run_dir / "terminal.json", {"outcome": "success"})
-            _write_json(run_dir / "config" / "run_config.json", {"plan_id": "plan-1"})
+            _write_product(run_dir)
             plan = _plan()
             matrix_plan = {"matrix_id": "matrix-1", "plans": [plan]}
             status = {

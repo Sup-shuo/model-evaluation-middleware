@@ -25,7 +25,8 @@
 - 通过 Core 中的厂商/框架分支猜测环境兼容性。
 
 `runtime_versions.json` 只是随结果保存的实验条件，不是锁文件、资产证明或审计证据；
-它不会扫描全部已安装包，也不扩大上述边界。
+它不会扫描全部已安装包，也不扩大上述边界。需要严格重建 Controller Python 时，用户
+可显式运行 `environment-snapshot` 生成独立环境清单；该命令不改变普通结果协议。
 
 运行时内部会短暂保存计划、preflight 和进程状态，以支持执行与失败排错；成功后删除这些临时状态。它们不是独立的审计产品。
 
@@ -141,6 +142,15 @@ user_parameters.schema.json  # 可选，Adapter 自有用户参数
 | Evaluator | 框架预检、执行计划、结果标准化 | requirements, plan_preflight?, plan_evaluate, normalize, snapshot |
 
 Adapter 之间禁止相互 import。跨组件通信只通过 canonical objects；外部 Adapter 可使用公共 SDK，不需要 import Core。
+
+内置 Adapter 从随包目录发现。pip 安装的第三方 Adapter 通过
+`model_evaluation.adapters` entry point 声明 `<kind>.<name>` 与包含 launcher 的模块
+目录。Core 只读取 distribution metadata 并定位可执行文件，不调用
+`EntryPoint.load()`，所以发现阶段不会把第三方模块 import 进 Core。实际调用仍是受控
+子进程；同名内置、开发目录和已安装插件会被判为冲突，而不是按照搜索顺序覆盖。
+
+Adapter 的“协议可发现”不等于“生产组合已验证”。发布说明必须区分真机完整 E2E、
+集成/回归测试和仅 manifest/schema/RPC contract-tested 三种状态。
 
 ## 5. Adapter RPC
 
@@ -314,6 +324,11 @@ ExecutionPlan、preflight、Dataset/Task staging 和进程状态位于隐藏的 
 
 Batch 产品应聚合 child `result.json` 和 `metrics.json`，同时保留 child run 路径。恢复执行所需的内部状态与面向用户的 batch summary 分离。
 
+四个根层产品文件分别由 `result.schema.json`、`metrics.schema.json`、
+`terminal.schema.json` 和 `failure.schema.json` 定义。Core 在写入时验证单文件 Schema；
+`result-check`/`inspect` 进一步验证跨文件身份、指标、outcome 规则和公开 artifact 路径。
+这些是产品兼容性检查，不是来源真实性或防篡改验证。
+
 ## 8. 执行阶段与不变量
 
 典型阶段：
@@ -396,6 +411,12 @@ Core 对 managed process 负责：
 
 以下情况即使种子相同也可能不逐 bit 一致：不同硬件 kernel、不同 Runtime/Backend 版本、浮点归约顺序、并发请求调度、外部服务漂移、未固定数据/模型 revision。项目承诺把已知控制面显式化，不承诺跨任意硬件逐 token 完全一致。
 
+`environment-snapshot` 是可选的严格 Controller 环境导出：JSON 保存 Python 与已安装
+distribution 信息，requirements lock 保存精确版本。Backend/Evaluator 若使用独立
+Conda/venv，必须由各自环境另外导出；Core 不把三种 Python 环境误合并成一个 lock。
+仓库的 `requirements-strict.txt` 提供本发行版测试过的 Controller 基线，默认
+`requirements.txt` 则保留兼容范围；两种安装方式不改变结果协议。
+
 ## 12. 扩展规则
 
 ### 新硬件
@@ -426,13 +447,29 @@ Core 对 managed process 负责：
 4. 参数默认值属于 Adapter 或 profile，不进入 Core；
 5. secret、路径和 subprocess 环境遵守安全边界；
 6. 结果保留 raw、逐任务指标和必要配置；
-7. 脱敏检查、静态契约、Schema 和单测全部通过。
+7. 静态契约、单测和 wheel/release smoke 全部通过。
 
-## 13. 发布与目录边界
+## 13. 维护边界
 
-源码、协议 Schema、内置 Presets 和 Adapter 构成运行目录。项目直接从源码运行，不要求 wheel 或 ZIP。`results/`、cache、runtime 临时状态和 build/dist 不进入 Git 仓库，也不应在发布过程中被删除。
+核心执行文件按生命周期聚合，但新增职责不得继续堆进单一类：
 
-公开仓库的门禁是脱敏扫描、Schema、静态合同和 Linux 单测。运行结果不生成防篡改证据，也不要求用户为模型、数据或结果预登记 SHA。
+- `core/runtime_record.py` 负责普通运行版本记录；
+- `core/matrix_config.py` 负责 Matrix Schema 与仓库加载；
+- `core/matrix_product.py` 负责批次结果校验、TSV 汇总与对外产品发布；
+- `core/process/procfs.py` 负责 Linux process identity/procfs 读取；
+- `core/registry/plugin_discovery.py` 负责内置、开发目录和已安装插件候选发现；
+- `onboarding.py` 与 `environment_snapshot.py` 分别负责首次接入和可选环境导出。
+
+`Orchestrator` 只保留有序执行状态机，`MatrixExecutor` 只保留批量调度/恢复，
+`ProcessManager` 只保留进程所有权与生命周期。后续拆分以职责和回归测试为依据，不以
+“达到某个行数”作为目的。新增或实际修改的代码采用一行一个逻辑动作，避免继续引入
+`a=...; b=...; if ...:` 的压缩写法；旧路径在涉及功能改动时逐段整理。
+
+## 14. 发布与目录边界
+
+源码、协议 Schema、内置 Specs 和 Adapter 构成运行 bundle。`results/`、cache、runtime 临时状态、build/dist 不进入 wheel 或 release archive，也不应在发布过程中被删除。
+
+发布门禁通过 wheel 安装检查、ZIP 解包复测和入口权限检查确认分发内容可用；最终输出的单个传输 SHA 只用于发现上传或下载损坏，不是运行结果证据，也不要求用户为模型、数据或结果预登记 SHA。
 
 长期稳定性优先级：
 

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "metrics.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "model",
+    "benchmark",
+    "framework",
+    "summary",
+    "groups",
+    "tasks"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "run_id": {"$ref": "common.schema.json#/$defs/id"},
+    "model": {"$ref": "common.schema.json#/$defs/id"},
+    "benchmark": {"$ref": "common.schema.json#/$defs/id"},
+    "framework": {"$ref": "common.schema.json#/$defs/id"},
+    "summary": {"$ref": "canonical_result.schema.json#/$defs/metricMap"},
+    "groups": {
+      "type": "object",
+      "additionalProperties": {"$ref": "canonical_result.schema.json#/$defs/breakdownDetail"}
+    },
+    "tasks": {
+      "type": "object",
+      "additionalProperties": {"$ref": "canonical_result.schema.json#/$defs/breakdownDetail"}
+    }
+  }
+}

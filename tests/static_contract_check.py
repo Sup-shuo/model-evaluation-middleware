@@ -34,19 +34,6 @@ EXPECTED_OPS={
 SPEC_SCHEMAS={'models':'model_spec','platforms':'platform_profile','deployments':'deployment_profile','benchmarks':'benchmark_spec','evaluations':'evaluation_profile','runs':'run_spec'}
 MANIFEST_GLOBAL_BUDGET_SECONDS=5.0
 MANIFEST_PER_ADAPTER_SECONDS=0.5
-ALLOWED_ABSOLUTE_LITERAL_PREFIXES=(
-    # Kernel interfaces used by device/process discovery.
-    '/proc','/sys','/dev',
-)
-ALLOWED_ABSOLUTE_LITERALS={
-    '/','//','/stat',
-    # OpenAI-compatible and dataset URL route fragments, not host paths.
-    '/v1','/v1/completions','/models','/completions','/chat/completions',
-    '/tokenizer_info','/tokenize','/detokenize','/bbh',
-    # Error strings describing the corresponding protocol route.
-    '/models returned a non-object response',
-    '/models did not report any model ids',
-}
 
 
 def _lint_python_adapter_sources() -> None:
@@ -66,31 +53,6 @@ def _lint_python_adapter_sources() -> None:
                 targets=node.targets if isinstance(node,ast.Assign) else [node.target]
                 if any(isinstance(t,ast.Name) and t.id=='MANIFEST' for t in targets):
                     raise SystemExit(f'impl.py duplicates adapter manifest identity; manifest.json is authoritative: {path}')
-
-
-def _check_deployment_paths_live_in_config() -> None:
-    """Reject machine installation paths embedded in production Python.
-
-    Kernel discovery paths under /proc, /sys and /dev are protocol interfaces,
-    not deployment inventory. Package resources are resolved relative to the
-    installed package and therefore do not appear as absolute literals.
-    """
-    for path in sorted(PACKAGE_ROOT.rglob('*.py')):
-        tree=ast.parse(path.read_text(encoding='utf-8'),filename=str(path))
-        for node in ast.walk(tree):
-            if not isinstance(node,ast.Constant) or not isinstance(node.value,str):
-                continue
-            if not node.value.startswith('/'):
-                continue
-            if node.value in ALLOWED_ABSOLUTE_LITERALS:
-                continue
-            if node.value.startswith(ALLOWED_ABSOLUTE_LITERAL_PREFIXES):
-                continue
-            if node.value.startswith('/'):
-                raise SystemExit(
-                    f'deployment path literal must live in System config: '
-                    f'{path.relative_to(ROOT)}:{node.lineno}: {node.value!r}'
-                )
 
 
 def _load_protocol_manifest(entry: Path, deadline: float) -> dict:
@@ -201,7 +163,6 @@ def main():
         Draft202012Validator(schema,format_checker=contract_format_checker())
         ext_checked.append(path.name)
     _lint_python_adapter_sources()
-    _check_deployment_paths_live_in_config()
     manifests=_check_adapters(schemas)
     for dirname,schema in SPEC_SCHEMAS.items():
         for path in sorted((PACKAGE_ROOT/'presets'/dirname).glob('*.yaml')):

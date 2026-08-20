@@ -19,11 +19,23 @@ class ResultPublicationTests(unittest.TestCase):
     @staticmethod
     def _plan() -> dict:
         return {
-            "run_spec": {"model": "internal-model", "benchmark": "bbh"},
+            "run_spec": {
+                "model": "internal-model",
+                "platform": "internal-platform",
+                "deployment": "internal-deployment",
+                "benchmark": "bbh",
+            },
             "resolved": {
                 "specs": {
                     "model": {"experiment_id": "qwen35-08b-base"},
-                    "platform": {"metadata": {"timezone": "Asia/Shanghai"}},
+                    "platform": {
+                        "device": {"adapter": "nvidia"},
+                        "metadata": {
+                            "timezone": "Asia/Shanghai",
+                            "result_platform": "a100",
+                        },
+                    },
+                    "deployment": {"backend": {"adapter": "vllm"}},
                 }
             },
         }
@@ -31,7 +43,7 @@ class ResultPublicationTests(unittest.TestCase):
     def test_short_beijing_run_name_and_same_second_suffix(self):
         when = datetime(2026, 8, 13, 2, 19, 20, tzinfo=ZoneInfo("Asia/Shanghai"))
         base = run_id_base(self._plan(), when=when)
-        self.assertEqual(base, "qwen35-08b-base_bbh_20260813-021920")
+        self.assertEqual(base, "a100_qwen35-08b-base_vllm_bbh_260813-0219")
         with tempfile.TemporaryDirectory() as td:
             with patch("model_evaluation.core.results.run_id_base", return_value=base):
                 first = allocate_run_dir(td, self._plan())

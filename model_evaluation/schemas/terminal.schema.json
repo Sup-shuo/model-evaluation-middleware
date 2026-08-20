@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "terminal.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "outcome",
+    "started_at",
+    "finished_at",
+    "timezone",
+    "cleanup"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "run_id": {"$ref": "common.schema.json#/$defs/id"},
+    "outcome": {"enum": ["success", "failed"]},
+    "started_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": "string", "format": "date-time"},
+    "timezone": {"type": "string", "minLength": 1},
+    "cleanup": {"$ref": "#/$defs/cleanup"},
+    "warnings": {"type": "array", "items": {}},
+    "error": {"$ref": "#/$defs/error"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"outcome": {"const": "failed"}}},
+      "then": {"required": ["error"]}
+    },
+    {
+      "if": {"properties": {"outcome": {"const": "success"}}},
+      "then": {
+        "not": {"required": ["error"]},
+        "properties": {
+          "cleanup": {
+            "properties": {"status": {"const": "clean"}}
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "code", "message"],
+      "properties": {
+        "type": {"type": "string", "minLength": 1},
+        "code": {"type": "string", "minLength": 1},
+        "message": {"type": "string", "minLength": 1},
+        "stage": {"type": "string", "minLength": 1},
+        "retryable": {"type": "boolean"},
+        "details": {"type": "object", "additionalProperties": true}
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status", "backend"],
+      "properties": {
+        "status": {"enum": ["clean", "incomplete"]},
+        "backend": {"type": "object", "additionalProperties": true},
+        "secondary_errors": {"type": "array", "items": {"$ref": "#/$defs/error"}}
+      }
+    }
+  }
+}

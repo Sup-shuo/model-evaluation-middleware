@@ -9,6 +9,7 @@ class ModelEvalError(RuntimeError):
 
 class ConfigError(ModelEvalError): code = "CONFIG_INVALID"
 class SchemaValidationError(ModelEvalError): code = "CONFIG_INVALID"
+class ResultProductError(ModelEvalError): code = "RESULT_INVALID"
 class AdapterProtocolError(ModelEvalError): code = "ADAPTER_PROTOCOL_ERROR"
 class AdapterExecutionError(ModelEvalError):
     def __init__(self, code: str, message: str, *, retryable: bool = False, details: dict | None = None):

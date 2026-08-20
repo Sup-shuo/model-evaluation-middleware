@@ -36,6 +36,30 @@ def _component(value: object) -> str:
     return text[:80].rstrip(".-") or "unknown"
 
 
+def _platform_component(plan: dict) -> str:
+    run_spec = plan.get("run_spec") or {}
+    platform = (((plan.get("resolved") or {}).get("specs") or {}).get("platform") or {})
+    metadata = platform.get("metadata") or {}
+    device = platform.get("device") or {}
+    return _component(
+        metadata.get("result_platform")
+        or device.get("adapter")
+        or run_spec.get("platform")
+        or "unknown-platform"
+    )
+
+
+def _backend_component(plan: dict) -> str:
+    run_spec = plan.get("run_spec") or {}
+    deployment = (((plan.get("resolved") or {}).get("specs") or {}).get("deployment") or {})
+    backend = deployment.get("backend") or {}
+    return _component(
+        backend.get("adapter")
+        or run_spec.get("deployment")
+        or "unknown-backend"
+    )
+
+
 def run_id_base(plan: dict, *, when: datetime | None = None) -> str:
     run_spec = plan.get("run_spec") or {}
     model_spec = (((plan.get("resolved") or {}).get("specs") or {}).get("model") or {})
@@ -45,8 +69,15 @@ def run_id_base(plan: dict, *, when: datetime | None = None) -> str:
         or run_spec.get("model")
         or "unknown-model"
     )
-    stamp = (when or local_now(plan)).strftime("%Y%m%d-%H%M%S")
-    return f"{_component(model_identity)}_{_component(run_spec.get('benchmark') or 'unknown-benchmark')}_{stamp}"
+    stamp = (when or local_now(plan)).strftime("%y%m%d-%H%M")
+    components = (
+        _platform_component(plan),
+        _component(model_identity),
+        _backend_component(plan),
+        _component(run_spec.get("benchmark") or "unknown-benchmark"),
+        stamp,
+    )
+    return "_".join(components)
 
 
 def allocate_run_dir(results_root: str | Path, plan: dict) -> Path:
@@ -103,7 +134,13 @@ def _copy_artifact(source: Path, destination: Path) -> None:
     shutil.copy2(source, destination)
 
 
-def publish_result(run_dir: str | Path, raw_root: str | Path, result: dict) -> dict:
+def publish_result(
+    run_dir: str | Path,
+    raw_root: str | Path,
+    result: dict,
+    *,
+    schemas=None,
+) -> dict:
     """Publish framework output as a compact, user-facing experiment result.
 
     Framework-native files remain lossless under ``raw/``.  ``result.json`` and
@@ -156,6 +193,9 @@ def publish_result(run_dir: str | Path, raw_root: str | Path, result: dict) -> d
         "groups": copy.deepcopy(breakdowns.get("groups") or {}),
         "tasks": copy.deepcopy(breakdowns.get("tasks") or {}),
     }
+    if schemas is not None:
+        schemas.validate("result", published)
+        schemas.validate("metrics", metrics)
     atomic_json(root / "metrics.json", metrics)
     atomic_json(root / "result.json", published)
     return published

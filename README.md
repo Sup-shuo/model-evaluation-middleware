@@ -50,14 +50,10 @@ and Cambricon accelerators. Other built-in adapters are contract-tested, but a
 real `doctor` and smoke run are still required on every new host.
 
 For engineers who already have a backend, evaluator environment, model mount,
-and dataset cache, the project is usable today. It is not yet a one-command tool
-for first-time users. The remaining maturity work is mainly onboarding rather
-than a redesign of the execution core:
-
-- an `init` assistant that generates a private System file;
-- clearer dependency/cache bootstrap diagnostics;
-- real-host smoke coverage for more built-in adapters;
-- a smaller set of curated recipes for common backend/evaluator combinations.
+and dataset cache, the project is usable today. `init`, human-readable `doctor`,
+result `inspect`, external Adapter discovery and an installed-wheel release gate
+cover the basic onboarding path. New hardware/backend combinations still require
+their own real-host smoke and intended-benchmark run.
 
 Site inventories, debug queues, private model catalogs, and historical results
 are intentionally not part of that roadmap or the public source tree.
@@ -68,12 +64,20 @@ are intentionally not part of that roadmap or the public source tree.
 python3 -m pip install -r requirements.txt
 ```
 
+For a Controller/Core environment pinned to the versions used by this release:
+
+```bash
+python3 -m pip install -r requirements-strict.txt
+```
+
 Check the bundled contracts and adapters:
 
 ```bash
 ./eval-manager schema-check
 ./eval-manager adapters
 ```
+
+Wheel installations expose the same `eval-manager` console script.
 
 ## Configuration model
 
@@ -112,6 +116,17 @@ enforced path boundary.
 
 ## First run
 
+Generate a minimal project without overwriting existing files:
+
+```bash
+mkdir my-evaluation
+eval-manager init my-evaluation --hardware nvidia
+```
+
+Replace the generated `REPLACE_WITH_*` values, then use the normal
+`validate → doctor → run` flow. Existing repositories can instead copy the
+bundled examples as shown below.
+
 Copy the examples into the ignored private directory:
 
 ```bash
@@ -149,11 +164,13 @@ Then run the workflow in order:
 ```
 
 - `validate` checks user schemas and adapter parameters.
-- `doctor` probes hardware, environments, framework dependencies, and model
+- `doctor` prints a human-readable probe of hardware, environments, framework dependencies, and model
   configuration without starting the long-lived model service.
 - `plan` shows the fully resolved workload.
 - `run` starts or attaches to the backend, evaluates, saves output, and cleans up
   owned processes.
+
+Use `doctor --format json` for automation.
 
 To move the same Qwen evaluation from NVIDIA to MLU, keep the Model and
 Evaluation unchanged and select the MLU System:
@@ -192,6 +209,17 @@ results/<model>_<benchmark>_YYYYMMDD-HHMMSS/
 the native evaluator output. Successful runs remove transient `.run/` state.
 The project does not generate proof/evidence bundles for normal results.
 
+The four root JSON files have independent versioned schemas. Validate their
+cross-file identities, metrics and artifact paths with:
+
+```bash
+eval-manager result-check results/<run-id>
+eval-manager inspect results/<run-id>
+eval-manager inspect results/<run-id> --format json
+```
+
+See [the result product protocol](docs/result-product.md).
+
 Render a saved result as a terminal table and SVG:
 
 ```bash
@@ -223,13 +251,30 @@ does not import the implementation framework. See
 [ARCHITECTURE_AND_ADAPTER_PROTOCOL.md](ARCHITECTURE_AND_ADAPTER_PROTOCOL.md) for
 object contracts and lifecycle rules.
 
+Third-party adapters may be installed as Python packages using the
+`model_evaluation.adapters` entry-point group, or supplied through absolute
+roots in `MODEL_EVAL_ADAPTER_PATHS`. Discovery does not import plugin code into
+Core; execution remains JSON-over-stdio. Validate an unpacked plugin first:
+
+```bash
+eval-manager adapter-check /absolute/path/to/adapters
+```
+
 ## Development
 
 ```bash
 python scripts/check_public_tree.py
 python tests/static_contract_check.py
 python -m unittest discover -s tests -p 'test_*.py'
+python scripts/build_release.py
 ```
+
+Compatibility claims are defined in [docs/compatibility.md](docs/compatibility.md).
+Sanitized real-machine records are available for
+[NVIDIA A100](docs/validation/nvidia-a100.md) and
+[Cambricon MLU](docs/validation/cambricon-mlu.md). See
+[CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md) before
+submitting integrations or vulnerability reports.
 
 ## License
 
