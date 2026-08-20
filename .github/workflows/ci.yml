@@ -21,7 +21,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - name: Install controller dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+        run: python -m pip install --upgrade pip setuptools wheel && python -m pip install -r requirements.txt
       - name: Public-tree privacy check
         run: python scripts/check_public_tree.py
       - name: Schema check
