@@ -220,8 +220,17 @@ def _doctor_row(app, orchestrator, child: dict, cache_root: str) -> dict:
     return row
 
 
-def run_doctor(app, *, system_config: str | None, evaluation_config: str | None, output_format: str) -> bool:
-    plan, bundle = app.user_matrix_plan(system_config, evaluation_config)
+def build_doctor_report(app, *, plan=None, bundle=None, system_config: str | None = None, evaluation_config: str | None = None) -> dict:
+    """Return the structured doctor report without rendering it.
+
+    ``check`` and ``doctor`` deliberately share this implementation so their
+    preflight semantics cannot drift.  Callers that already planned a user
+    configuration may pass the detached plan/bundle pair to avoid resolving it
+    twice.
+    """
+
+    if plan is None or bundle is None:
+        plan, bundle = app.user_matrix_plan(system_config, evaluation_config)
     orchestrator = app.orchestrator(
         results_root=bundle.results_root,
         cache_root=bundle.cache_root,
@@ -242,9 +251,17 @@ def run_doctor(app, *, system_config: str | None, evaluation_config: str | None,
         "selected_profiles": bundle.generated.get("selected_profiles", {}),
         "runs": rows,
     }
-    redacted = redact_diagnostic(payload, orchestrator.pm.secrets.redaction_values())
+    return redact_diagnostic(payload, orchestrator.pm.secrets.redaction_values())
+
+
+def run_doctor(app, *, system_config: str | None, evaluation_config: str | None, output_format: str) -> bool:
+    redacted = build_doctor_report(
+        app,
+        system_config=system_config,
+        evaluation_config=evaluation_config,
+    )
     if output_format == "json":
         print(json.dumps(redacted, ensure_ascii=False, indent=2, sort_keys=True))
     else:
         print(render_doctor(redacted), end="")
-    return ok
+    return bool(redacted["ok"])

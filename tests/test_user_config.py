@@ -372,6 +372,7 @@ class UserConfigTests(unittest.TestCase):
             for name, device, runtime, device_id in (
                 ("mlu-host", "mlu", "neuware", 2),
                 ("nvidia-host", "nvidia", "cuda", 0),
+                ("metax-host", "metax", "maca", 1),
             ):
                 app = Application(PACKAGE_ROOT, ROOT)
                 bundle = app.user_config.load(machine(name, device, runtime, device_id), evaluation_path)
@@ -381,8 +382,10 @@ class UserConfigTests(unittest.TestCase):
 
             self.assertEqual(resolved["mlu-host"][0]["device"]["devices"], ["2"])
             self.assertEqual(resolved["nvidia-host"][0]["device"]["devices"], ["0"])
+            self.assertEqual(resolved["metax-host"][0]["device"]["devices"], ["1"])
             self.assertEqual(resolved["mlu-host"][0]["runtime"]["adapter"], "neuware")
             self.assertEqual(resolved["nvidia-host"][0]["runtime"]["adapter"], "cuda")
+            self.assertEqual(resolved["metax-host"][0]["runtime"]["adapter"], "maca")
             for platform, deployment, bundle in resolved.values():
                 self.assertEqual(platform["backend_environment"]["provider"], "current")
                 self.assertEqual(deployment["backend"]["adapter"], "vllm")
@@ -1230,6 +1233,21 @@ class UserConfigTests(unittest.TestCase):
             self.assertIn('fake-vllm-1.0',probes[0]['stdout'])
             self.assertFalse(probes[1]['result']['facts']['weights_loaded'])
             self.assertEqual(checks['evaluator_environment']['status'],'ok')
+
+            check_proc=subprocess.run([sys.executable,str(ROOT/'eval-manager'),'check','--format','json','--system-config',str(system_path),'--evaluation-config',str(evaluation_path)],cwd=ROOT,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=False,env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1'})
+            self.assertEqual(check_proc.returncode,0,check_proc.stdout+check_proc.stderr)
+            check=json.loads(check_proc.stdout)
+            self.assertTrue(check['ok'])
+            self.assertEqual(
+                {name: phase['status'] for name, phase in check['phases'].items()},
+                {'validation':'ok','planning':'ok','doctor':'ok','resources':'ok'},
+            )
+            self.assertEqual(check['phases']['planning']['details']['runs'],1)
+
+            explain_proc=subprocess.run([sys.executable,str(ROOT/'eval-manager'),'explain','--system-config',str(system_path),'--evaluation-config',str(evaluation_path)],cwd=ROOT,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=False,env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1'})
+            self.assertEqual(explain_proc.returncode,0,explain_proc.stdout+explain_proc.stderr)
+            self.assertIn('Explain: RUNNABLE',explain_proc.stdout)
+            self.assertIn('unknown values are not inferred',explain_proc.stdout)
 
 
 if __name__ == "__main__":

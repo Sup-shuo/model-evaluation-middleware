@@ -29,6 +29,23 @@ verify cryptographic provenance and does not turn a result into tamper-proof
 evidence. The product records what was run and preserves the framework output;
 trust and governance remain outside this glue layer.
 
+Python consumers can use the same validation boundary without parsing CLI
+output:
+
+```python
+from model_evaluation.results import load_run
+
+run = load_run("results/<run-id>")
+run.metrics.summary()
+run.metrics.groups()
+run.metrics.tasks()
+run.runtime()
+run.artifacts()
+```
+
+The SDK returns defensive copies and read-only artifact descriptors. It does not
+create another result format or reinterpret framework metrics.
+
 Framework-native data remains under `raw/`. Per-sample files remain under
 `samples/` and are present only when the evaluator was explicitly configured to
 emit them. `config/` records the effective run and observed runtime versions;

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "diagnostic_report.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "ok", "scope", "system", "phases", "explanations"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "ok": {"type": "boolean"},
+    "scope": {"const": "validate-doctor-plan-resource-preview-no-service-start"},
+    "system": {"type": ["string", "null"]},
+    "phases": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["validation", "planning", "doctor", "resources"],
+      "properties": {
+        "validation": {"$ref": "#/$defs/phase"},
+        "planning": {"$ref": "#/$defs/phase"},
+        "doctor": {"$ref": "#/$defs/phase"},
+        "resources": {"$ref": "#/$defs/phase"}
+      }
+    },
+    "explanations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["phase", "code", "message"],
+        "properties": {
+          "phase": {"enum": ["validation", "planning", "doctor", "resources"]},
+          "code": {"type": "string", "minLength": 1},
+          "message": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "code", "message"],
+      "properties": {
+        "type": {"type": "string", "minLength": 1},
+        "code": {"type": "string", "minLength": 1},
+        "message": {"type": "string", "minLength": 1}
+      }
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["ok", "failed", "skipped"]},
+        "details": {"type": "object", "additionalProperties": true},
+        "error": {"$ref": "#/$defs/error"}
+      }
+    }
+  }
+}

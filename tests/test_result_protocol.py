@@ -8,6 +8,7 @@ from pathlib import Path
 from model_evaluation.core.errors import ResultProductError, SchemaValidationError
 from model_evaluation.core.result_product import inspect_run_product
 from model_evaluation.core.schema.validator import SchemaStore
+from model_evaluation.results import load_run
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -91,6 +92,39 @@ class ResultProtocolTests(unittest.TestCase):
             self.assertEqual(report["tasks"], 1)
             self.assertEqual(report["effective_samples"], 10)
             self.assertEqual(report["artifacts"], 2)
+
+    def test_python_result_sdk_exposes_stable_read_only_views(self):
+        with tempfile.TemporaryDirectory() as td:
+            run = self._success(Path(td))
+            _write(run / "config" / "run_config.json", {"plan_id": "plan-example"})
+            _write(
+                run / "config" / "runtime_versions.json",
+                {"backend": {"version": "1.0"}},
+            )
+            loaded = load_run(run, schemas=self.schemas)
+            self.assertEqual(loaded.run_id, run.name)
+            self.assertEqual(loaded.outcome, "success")
+            self.assertEqual(loaded.metrics.summary()["accuracy"]["value"], 0.5)
+            self.assertEqual(set(loaded.metrics.tasks()), {"task"})
+            self.assertEqual(
+                loaded.runtime()["runtime_versions"]["backend"]["version"],
+                "1.0",
+            )
+            artifacts = loaded.artifacts()
+            self.assertEqual([artifact.kind for artifact in artifacts], ["raw", "sample"])
+            self.assertTrue(all(artifact.path.is_file() for artifact in artifacts))
+            summary = loaded.metrics.summary()
+            summary["accuracy"]["value"] = 0.0
+            self.assertEqual(loaded.metrics.summary()["accuracy"]["value"], 0.5)
+
+    def test_python_result_sdk_preserves_run_symlink_rejection(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            run = self._success(root)
+            link = root / "linked-run"
+            link.symlink_to(run, target_is_directory=True)
+            with self.assertRaisesRegex(ResultProductError, "may not be a symlink"):
+                load_run(link, schemas=self.schemas)
 
     def test_result_completion_may_precede_terminal_finalization(self):
         with tempfile.TemporaryDirectory() as td:

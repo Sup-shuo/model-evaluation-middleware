@@ -13,6 +13,7 @@ from model_evaluation.commands.doctor import (
     run_doctor,
 )
 from model_evaluation.commands.render import render_inspection
+from model_evaluation.commands.workflow import run_check
 from model_evaluation.core.app import Application
 from model_evaluation.core.config.deployment import resolve_deployment_profile
 from model_evaluation.core.config.evaluation import resolve_evaluation_profile
@@ -106,6 +107,13 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("schema-check")
     commands.add_parser("adapters")
 
+    demo = commands.add_parser(
+        "demo",
+        help="运行无需 GPU/NPU 的 reference E2E，并输出最终 JSON 报告",
+    )
+    demo.add_argument("--results-root")
+    demo.add_argument("--cache-root")
+
     adapter_check = commands.add_parser(
         "adapter-check",
         help="验证一个外部 Adapter root 的目录、Manifest 与协议版本",
@@ -139,6 +147,20 @@ def build_parser() -> argparse.ArgumentParser:
     add_user_config_args(doctor)
     doctor.add_argument("--format", choices=("human", "json"), default="human")
 
+    check = commands.add_parser(
+        "check",
+        help="组合 validate、doctor、plan preview 与只读资源检查（不启动模型服务）",
+    )
+    add_user_config_args(check)
+    check.add_argument("--format", choices=("human", "json"), default="human")
+
+    explain = commands.add_parser(
+        "explain",
+        help="解释所选模型、后端与机器组合为何可运行或被阻止",
+    )
+    add_user_config_args(explain)
+    explain.add_argument("--format", choices=("human", "json"), default="human")
+
     plan = commands.add_parser(
         "plan",
         help="不带 RunSpec 时从两份用户配置生成批量计划",
@@ -169,6 +191,14 @@ def build_parser() -> argparse.ArgumentParser:
     matrix_plan = commands.add_parser("matrix-plan")
     matrix_plan.add_argument("matrix")
     matrix_plan.add_argument("-o", "--output")
+
+    matrix_export = commands.add_parser(
+        "matrix-export",
+        help="把已保存的 Matrix plan 分片为调度器无关的 execution-plan bundle",
+    )
+    matrix_export.add_argument("plan")
+    matrix_export.add_argument("-o", "--output", required=True)
+    matrix_export.add_argument("--shards", type=int, default=1)
 
     matrix_run = commands.add_parser("matrix-run")
     matrix_run.add_argument("matrix")
@@ -291,6 +321,35 @@ def _emit_batch(path: Path, summary: dict) -> None:
 
 
 def _handle_plan_or_run(args: argparse.Namespace, app: Application) -> bool:
+    if args.cmd == "demo":
+        example_root = package_root() / "examples" / "mock"
+        plan, bundle = app.user_matrix_plan(
+            example_root / "system.yaml",
+            example_root / "evaluation.yaml",
+        )
+        executor = app.matrix_executor(
+            results_root=args.results_root or bundle.results_root,
+            cache_root=args.cache_root or bundle.cache_root,
+        )
+        batch_dir, summary = executor.execute(plan)
+        runs = json_loads_strict(
+            (batch_dir / "runs.json").read_text(encoding="utf-8")
+        )
+        successful = [row for row in runs if row.get("status") == "success"]
+        if summary.get("failed") or summary.get("not_run") or len(successful) != 1:
+            _emit_batch(batch_dir, summary)
+        run_dir = Path(str(successful[0]["run_dir"]))
+        report = inspect_run_product(run_dir, app.schemas)
+        dump(
+            {
+                "ok": True,
+                "demo": "reference",
+                "batch_dir": str(batch_dir),
+                "report": report,
+            }
+        )
+        return True
+
     if args.cmd == "plan":
         if args.run:
             plan = app.plan(args.run)
@@ -364,6 +423,10 @@ def _handle_matrix(args: argparse.Namespace, app: Application) -> bool:
             atomic_json(args.output, plan)
         dump(plan)
         return True
+    if args.cmd == "matrix-export":
+        plan = app.load_matrix_plan(args.plan)
+        dump(app.export_matrix_plan(plan, args.output, shards=args.shards))
+        return True
     if args.cmd == "matrix-run":
         plan = app.matrix_plan(args.matrix)
         executor = app.matrix_executor(
@@ -406,6 +469,15 @@ def _main() -> None:
             system_config=args.system_config,
             evaluation_config=args.evaluation_config,
             output_format=args.format,
+        )
+        raise SystemExit(0 if ok else 2)
+    if args.cmd in {"check", "explain"}:
+        ok = run_check(
+            app,
+            system_config=args.system_config,
+            evaluation_config=args.evaluation_config,
+            output_format=args.format,
+            explain=args.cmd == "explain",
         )
         raise SystemExit(0 if ok else 2)
     if _handle_plan_or_run(args, app):

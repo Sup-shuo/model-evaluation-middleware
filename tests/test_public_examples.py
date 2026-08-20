@@ -17,6 +17,7 @@ class PublicExampleTests(unittest.TestCase):
         cases = [
             ("nvidia", "smoke_bbh_08b", "qwen-example", "nvidia", "vllm"),
             ("mlu", "smoke_bbh_08b", "qwen-example", "mlu", "vllm"),
+            ("metax", "smoke_bbh_08b", "qwen-example", "metax", "vllm"),
             (
                 "cpu_llama_cpp",
                 "smoke_bbh_llama_cpp",

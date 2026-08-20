@@ -12,11 +12,19 @@ class HardwareTemplate:
     runtime: str
     runtime_family: str
     runtime_root: str | None
+    runtime_parameters: tuple[tuple[str, str], ...] = ()
 
 
 HARDWARE_TEMPLATES = {
     "nvidia": HardwareTemplate("nvidia", "cuda", "cuda", "/usr/local/cuda"),
     "mlu": HardwareTemplate("mlu", "neuware", "neuware", "/usr/local/neuware"),
+    "metax": HardwareTemplate(
+        "metax",
+        "maca",
+        "maca",
+        "/opt/maca",
+        (("driver_root", "/opt/mxdriver"), ("driver_tool", "/usr/bin/mx-smi")),
+    ),
     "amd": HardwareTemplate("amd", "rocm", "rocm", "/opt/rocm"),
     "ascend": HardwareTemplate(
         "ascend", "cann", "cann", "/usr/local/Ascend/ascend-toolkit/latest"
@@ -28,6 +36,12 @@ HARDWARE_TEMPLATES = {
 def _system_yaml(hardware: str) -> str:
     selected = HARDWARE_TEMPLATES[hardware]
     runtime_root = f"\n        root: {selected.runtime_root}" if selected.runtime_root else ""
+    runtime_parameters = ""
+    if selected.runtime_parameters:
+        values = "\n".join(
+            f"          {name}: {value}" for name, value in selected.runtime_parameters
+        )
+        runtime_parameters = f"\n        parameters:\n{values}"
     devices = "\n      devices: [0]" if hardware != "cpu" else ""
     return f'''schema_version: "1.2"
 
@@ -51,7 +65,7 @@ profiles:
     local:
       type: {selected.device}{devices}
       runtime:
-        type: {selected.runtime}{runtime_root}
+        type: {selected.runtime}{runtime_root}{runtime_parameters}
 
   backend:
     vllm:

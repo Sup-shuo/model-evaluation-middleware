@@ -1,0 +1,42 @@
+schema_version: "1.2"
+
+system:
+  name: local-mock-demo
+
+metadata:
+  timezone: Asia/Shanghai
+  result_platform: mock
+
+profiles:
+  defaults:
+    hardware: cpu
+    backend: reference
+    evaluator: reference_eval
+
+  environment:
+    current-python:
+      type: current
+
+  hardware:
+    cpu:
+      type: cpu
+      runtime:
+        type: cpu
+
+  backend:
+    reference:
+      type: reference
+      environment: current-python
+      compatibility:
+        runtime_families: [cpu]
+
+  evaluator:
+    reference_eval:
+      type: reference_eval
+      environment: current-python
+
+models: {}
+
+paths:
+  cache: cache
+  results: results

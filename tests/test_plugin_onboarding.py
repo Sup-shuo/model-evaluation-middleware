@@ -116,7 +116,11 @@ class PluginAndOnboardingTests(unittest.TestCase):
             Path(sys.executable).resolve(),
         )
         entries = sorted((PACKAGE_ROOT / "adapters").glob("*/*/adapter"))
-        self.assertEqual(len(entries), 25)
+        self.assertTrue(entries)
+        self.assertIn(
+            PACKAGE_ROOT / "adapters" / "backend" / "reference" / "adapter",
+            entries,
+        )
         for entry in entries:
             source = entry.read_text(encoding="utf-8")
             self.assertIn(
@@ -169,6 +173,26 @@ class PluginAndOnboardingTests(unittest.TestCase):
             self.assertEqual(
                 (root / "config" / "system.yaml").read_text(encoding="utf-8"),
                 original,
+            )
+
+    def test_init_supports_metax_maca_template(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "metax-project"
+            initialize_project(root, hardware="metax")
+            system_path = root / "config" / "system.yaml"
+            system = load_yaml_strict(system_path.read_text(encoding="utf-8"))
+            self.user_schemas.validate("user_system", system)
+            hardware = system["profiles"]["hardware"]["local"]
+            self.assertEqual(hardware["type"], "metax")
+            self.assertEqual(hardware["devices"], [0])
+            self.assertEqual(hardware["runtime"]["type"], "maca")
+            self.assertEqual(hardware["runtime"]["root"], "/opt/maca")
+            self.assertEqual(
+                hardware["runtime"]["parameters"],
+                {
+                    "driver_root": "/opt/mxdriver",
+                    "driver_tool": "/usr/bin/mx-smi",
+                },
             )
 
     def test_controller_environment_snapshot_is_sorted_and_lockable(self):

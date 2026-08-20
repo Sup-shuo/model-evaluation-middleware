@@ -1,0 +1,32 @@
+{
+  "adapter_api": "1.0",
+  "implementation": {
+    "language": "python",
+    "purpose": "hardware-free-reference-demo"
+  },
+  "kind": "backend",
+  "name": "reference",
+  "operations": [
+    "requirements",
+    "plan_start",
+    "probe_service",
+    "snapshot"
+  ],
+  "schema_versions": {
+    "backend_start_plan": "1.1",
+    "process_spec": "1.0",
+    "requirement_set": "1.0",
+    "service_descriptor": "1.0"
+  },
+  "user_config": {
+    "default_management_mode": "managed",
+    "default_parameters": {
+      "port": 39091,
+      "ready_timeout_seconds": 5,
+      "shutdown_timeout_seconds": 3
+    },
+    "parameters_schema": "user_parameters.schema.json",
+    "schema_version": "1.0"
+  },
+  "version": "1.0.0"
+}

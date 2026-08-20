@@ -1,5 +1,25 @@
 # Changelog
 
+## 4.1.0-alpha32
+
+### Portable workflow and public API
+
+- Added `check` and `explain` over one structured pre-run workflow that combines
+  configuration validation, Doctor, plan preview and read-only resource checks.
+- Added a read-only `model_evaluation.results.load_run` API for the stable result
+  product and deterministic `matrix-export` bundles for external schedulers.
+- Added a hardware-free `eval-manager demo` using the same Matrix, process and
+  result-publication path as real evaluations.
+- Added project-relative cache roots and refreshed the configuration and result
+  documentation without changing the System/Model/Evaluation ownership boundary.
+
+### Adapter coverage
+
+- Added MetaX Device and MACA Runtime adapters plus contract tests and a sanitized
+  single-device validation record.
+- Kept the compatibility statement explicit: a smoke run proves that one tested
+  stack starts and cleans up; it is not a full model-quality evaluation.
+
 ## 4.1.0-alpha31
 
 ### Product and onboarding

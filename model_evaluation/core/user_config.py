@@ -606,7 +606,11 @@ class UserConfigResolver:
         deployment_id = _slug(f"{backend_profile_id}:{backend_type}", "user-backend")
         evaluation_id = _slug(f"{evaluator_profile_id}:{evaluator_type}", "user-evaluator")
 
-        cache_root = _absolute(str(system["paths"]["cache"]), "paths.cache")
+        cache_root = _project_path(
+            system["paths"]["cache"],
+            "paths.cache",
+            self.app.project_root,
+        )
         results_root = _project_path(
             system["paths"].get("results", "results"),
             "paths.results",

@@ -1,0 +1,21 @@
+{
+  "$id": "reference.user_parameters.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "port": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "ready_timeout_seconds": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    },
+    "shutdown_timeout_seconds": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    }
+  },
+  "type": "object"
+}

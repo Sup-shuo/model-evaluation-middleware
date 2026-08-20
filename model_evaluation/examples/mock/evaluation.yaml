@@ -1,0 +1,19 @@
+schema_version: "1.2"
+
+models:
+  - id: mock-model
+    label: Mock Model
+    source:
+      type: other
+      ref: reference/mock-model
+    provenance:
+      policy: migration
+
+benchmarks:
+  - mock_demo
+
+offline: true
+
+execution:
+  mode: serial
+  continue_on_error: false

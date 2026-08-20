@@ -1,0 +1,15 @@
+schema_version: "1.0"
+id: mock_demo
+dataset:
+  provider: virtual
+  revision: reference-v1
+protocol:
+  task: mock_demo
+  split: synthetic
+  fewshot: 0
+  inference: [reference]
+metrics: [contract_ok]
+bindings:
+  reference_eval: reference_eval
+metadata:
+  purpose: Hardware-free end-to-end demonstration of the result product.

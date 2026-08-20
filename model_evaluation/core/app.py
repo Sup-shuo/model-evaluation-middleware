@@ -14,6 +14,7 @@ from model_evaluation.core.serialization import json_loads_strict
 from model_evaluation.core.user_config import UserConfigResolver
 from model_evaluation.core.identifiers import stable_id
 from model_evaluation.core.errors import ConfigError
+from model_evaluation.core.matrix_export import export_execution_plans
 
 
 def _host_runtime_root() -> Path:
@@ -118,6 +119,15 @@ class Application:
         obj=json_loads_strict(Path(path).read_text(encoding='utf-8'))
         verify_matrix_plan(obj,app=self)
         return obj
+
+    def export_matrix_plan(self, plan: dict, output_dir: str | Path, *, shards: int) -> dict:
+        verify_matrix_plan(plan, app=self)
+        return export_execution_plans(
+            plan,
+            output_dir,
+            shards=shards,
+            schemas=self.matrix_schemas,
+        )
 
     def matrix_executor(self, *, results_root: str | Path | None=None, cache_root: str | Path | None=None, secrets: dict[str,str] | None=None):
         return MatrixExecutor(self,results_root=results_root,cache_root=cache_root,secrets_map=secrets)

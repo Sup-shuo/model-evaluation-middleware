@@ -236,6 +236,8 @@ def check_installable_bundle(root: Path) -> None:
             installed / "cli.py",
             installed / "VERSION.txt",
             installed / "core" / "app.py",
+            installed / "core" / "matrix_export.py",
+            installed / "results.py",
             installed / "sdk" / "runtime.py",
             installed / "adapters" / "backend" / "vllm" / "adapter",
             installed / "schemas" / "backend_start_plan.schema.json",
@@ -246,6 +248,11 @@ def check_installable_bundle(root: Path) -> None:
             installed / "schemas" / "metrics.schema.json",
             installed / "schemas" / "terminal.schema.json",
             installed / "schemas" / "failure.schema.json",
+            installed / "schemas" / "diagnostic_report.schema.json",
+            installed / "schemas" / "user" / "matrix_execution_export.schema.json",
+            installed / "schemas" / "user" / "matrix_execution_shard.schema.json",
+            installed / "examples" / "mock" / "system.yaml",
+            installed / "examples" / "mock" / "evaluation.yaml",
             installed / "presets" / "runs" / "external_mmlu_example.yaml",
         ]
         for item in required:
@@ -321,13 +328,55 @@ def check_installable_bundle(root: Path) -> None:
                 encoding="utf-8",
             )
         bounded(
-            [str(venv_python), "-m", "pip", "install", "--no-deps", str(wheels[0])],
+            [
+                str(venv_python),
+                "-m",
+                "pip",
+                "install",
+                "--force-reinstall",
+                "--no-deps",
+                str(wheels[0]),
+            ],
             root,
             timeout=45.0,
         )
         installed_schema = bounded([str(console), "schema-check"], root, timeout=20.0)
         if '"ok": true' not in installed_schema.stdout:
             raise SystemExit("pip-installed console script did not validate schemas")
+        installed_api = bounded(
+            [
+                str(venv_python),
+                "-c",
+                "from model_evaluation.results import load_run; "
+                "from model_evaluation.core.matrix_export import export_execution_plans; "
+                "assert callable(load_run) and callable(export_execution_plans)",
+            ],
+            root,
+            timeout=20.0,
+        )
+        if installed_api.returncode:
+            raise SystemExit("pip-installed Python product APIs are not importable")
+        installed_help = bounded([str(console), "--help"], root, timeout=20.0)
+        for command in ("demo", "check", "explain", "matrix-export"):
+            if command not in installed_help.stdout:
+                raise SystemExit(f"pip-installed console script is missing {command}")
+        demo_workspace = Path(temp_dir) / "demo-workspace"
+        demo_workspace.mkdir()
+        demo_result = bounded(
+            [
+                str(console),
+                "demo",
+                "--results-root",
+                str(demo_workspace / "results"),
+                "--cache-root",
+                str(demo_workspace / "cache"),
+            ],
+            demo_workspace,
+            timeout=20.0,
+        )
+        demo_payload = json.loads(demo_result.stdout)
+        if not demo_payload.get("ok") or demo_payload.get("report", {}).get("outcome") != "success":
+            raise SystemExit("pip-installed console script did not complete the Mock demo")
         initialized = Path(temp_dir) / "initialized-project"
         bounded(
             [str(console), "init", str(initialized), "--hardware", "cpu"],

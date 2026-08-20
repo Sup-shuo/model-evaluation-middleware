@@ -1,0 +1,61 @@
+schema_version: "1.2"
+
+# Generic single-card MetaX example. Replace every path for your container.
+system:
+  name: metax-vllm-example
+
+metadata:
+  timezone: Asia/Shanghai
+
+profiles:
+  defaults:
+    hardware: metax
+    backend: vllm
+    evaluator: lm_eval
+
+  environment:
+    backend:
+      type: current
+    evaluator:
+      type: venv
+      profile: /opt/venvs/lm-eval
+
+  hardware:
+    metax:
+      type: metax
+      devices: [0]
+      runtime:
+        type: maca
+        root: /opt/maca
+        parameters:
+          driver_root: /opt/mxdriver
+          driver_tool: /usr/bin/mx-smi
+
+  backend:
+    vllm:
+      type: vllm
+      executable: /usr/local/bin/vllm
+      environment: backend
+      compatibility:
+        runtime_families: [maca]
+      parameters:
+        port: 8091
+        gpu_memory_utilization: 0.80
+        max_num_seqs: 4
+        num_concurrent: 4
+
+  evaluator:
+    lm_eval:
+      type: lm_eval
+      root: /opt/lm-evaluation-harness
+      environment: evaluator
+      parameters:
+        provenance_policy: migration
+        require_clean_framework: false
+
+models:
+  root: /data/models
+
+paths:
+  cache: cache
+  results: results

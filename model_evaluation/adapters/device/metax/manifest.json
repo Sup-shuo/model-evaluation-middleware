@@ -1,0 +1,21 @@
+{
+  "adapter_api": "1.0",
+  "implementation": {
+    "language": "python"
+  },
+  "kind": "device",
+  "name": "metax",
+  "operations": [
+    "probe",
+    "visibility",
+    "snapshot"
+  ],
+  "schema_versions": {
+    "device_descriptor": "1.0"
+  },
+  "version": "1.0.0",
+  "user_config": {
+    "schema_version": "1.0",
+    "parameters_schema": "user_parameters.schema.json"
+  }
+}

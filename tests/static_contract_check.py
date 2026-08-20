@@ -39,6 +39,8 @@ MANIFEST_PER_ADAPTER_SECONDS=0.5
 def _lint_python_adapter_sources() -> None:
     """Additional lint for built-in Python code; not the normative adapter gate."""
     for path in sorted((PACKAGE_ROOT/'adapters').glob('*/*/*.py')):
+        if any(part.startswith('._') for part in path.relative_to(PACKAGE_ROOT).parts):
+            continue
         tree=ast.parse(path.read_text(encoding='utf-8'),filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node,(ast.Import,ast.ImportFrom)):

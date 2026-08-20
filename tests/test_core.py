@@ -2,6 +2,7 @@ from __future__ import annotations
 import copy, json, os, shutil, socket, sys, tempfile, time, unittest, subprocess
 from types import SimpleNamespace
 from pathlib import Path
+from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[1]
 PACKAGE_ROOT=ROOT/'model_evaluation'
 sys.path.insert(0,str(ROOT))
@@ -55,6 +56,54 @@ class CoreTests(unittest.TestCase):
             "/dev/cambricon_ipcm0", "/dev/cambricon_ipcm1", "/dev/cambricon_ipcm7",
         ]
         self.assertEqual(mod._ids_from_nodes(nodes), ["0", "1", "7"])
+
+    def test_metax_device_adapter_parses_inventory_and_owns_visibility(self):
+        mod=_load_adapter_impl_for_test("device", "metax")
+        listing=(
+            "mx-smi  version: 2.3.4\n"
+            "GPU#0    MXC500      0000:08:00.0   Available "
+            "(UUID: GPU-test-0)\n"
+            "GPU#2    MXC500      0000:0e:00.0   Available "
+            "(UUID: GPU-test-2)\n"
+        )
+        with patch.object(mod.shutil, "which", return_value="/usr/bin/mx-smi"):
+            with patch.object(
+                mod,
+                "_run",
+                return_value=SimpleNamespace(returncode=0, stdout=listing, stderr=""),
+            ):
+                devices=mod._listed_devices(1)
+        self.assertEqual([item["id"] for item in devices], ["0", "2"])
+        self.assertEqual(devices[0]["name"], "MetaX MXC500")
+        self.assertEqual(devices[0]["uuid"], "GPU-test-0")
+        self.assertEqual(
+            mod.visibility({"devices": [2]}, {}),
+            {"env_patch": {"set": {"MACA_VISIBLE_DEVICES": "2"}}},
+        )
+
+    def test_maca_runtime_patch_is_explicit_and_machine_owned(self):
+        mod=_load_adapter_impl_for_test("runtime", "maca")
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)/"maca"
+            driver=Path(td)/"driver"
+            for path in (
+                root/"bin",
+                root/"lib",
+                root/"mxgpu_llvm"/"bin",
+                root/"mxshmem"/"lib",
+                driver/"bin",
+                driver/"lib",
+            ):
+                path.mkdir(parents=True,exist_ok=True)
+            patch_value=mod.resolve_environment(
+                {"parameters":{"root":str(root),"driver_root":str(driver)}},
+                {},
+            )["env_patch"]
+        self.assertEqual(patch_value["set"]["MACA_PATH"],str(root.resolve()))
+        self.assertEqual(patch_value["set"]["MACA_HOME"],str(root.resolve()))
+        self.assertEqual(patch_value["set"]["PYTORCH_NVML_BASED_CUDA_CHECK"],"1")
+        self.assertIn(str((root/"bin").resolve()),patch_value["prepend_path"]["PATH"])
+        self.assertIn(str((driver/"lib").resolve()),patch_value["prepend_path"]["LD_LIBRARY_PATH"])
 
     def test_schema_discovery_ignores_macos_metadata_files(self):
         with tempfile.TemporaryDirectory() as td:

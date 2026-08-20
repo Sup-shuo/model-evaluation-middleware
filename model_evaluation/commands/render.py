@@ -54,3 +54,48 @@ def render_inspection(report: dict) -> str:
         error = report["error"]
         lines.append(f"Error: {error.get('code')}: {error.get('message')}")
     return "\n".join(lines) + "\n"
+
+
+def render_check(report: dict) -> str:
+    lines = [
+        f"Check: {'PASS' if report.get('ok') else 'FAIL'}",
+        f"System: {report.get('system') or '-'}",
+        f"Scope: {report.get('scope') or '-'}",
+    ]
+    labels = {
+        "validation": "Validate configuration",
+        "planning": "Preview execution plan",
+        "doctor": "Doctor local environments",
+        "resources": "Inspect point-in-time resources",
+    }
+    for name in ("validation", "planning", "doctor", "resources"):
+        phase = (report.get("phases") or {}).get(name) or {}
+        lines.append(f"[{str(phase.get('status') or 'unknown').upper()}] {labels[name]}")
+        if phase.get("error"):
+            lines.append(f"  {phase['error'].get('message') or '-'}")
+    planning = ((report.get("phases") or {}).get("planning") or {}).get("details") or {}
+    if planning.get("runs") is not None:
+        lines.append(
+            f"Plan: {planning.get('runs')} run(s), "
+            f"{planning.get('incompatible', 0)} incompatible"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def render_explanation(report: dict) -> str:
+    lines = [
+        f"Explain: {'RUNNABLE' if report.get('ok') else 'NOT RUNNABLE'}",
+        f"System: {report.get('system') or '-'}",
+    ]
+    explanations = report.get("explanations") or []
+    if not explanations:
+        lines.append("No blocking issue was found by validation, doctor, planning, or resource preview.")
+    else:
+        for index, item in enumerate(explanations, 1):
+            lines.append(
+                f"{index}. [{item.get('phase')}] {item.get('code')}: {item.get('message')}"
+            )
+    lines.append(
+        "Resource estimates are reported only when the selected Backend provides them; unknown values are not inferred."
+    )
+    return "\n".join(lines) + "\n"
