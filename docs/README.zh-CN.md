@@ -193,6 +193,18 @@ Model 和 Evaluation 可以在不同机器保持字节不变，只替换 System�
 Core 保持单机、串行 Matrix 与资源锁定位。大规模任务应由 Slurm、Kubernetes、Ray 或
 内部调度器消费导出的 child plans，而不是让这个项目演变为分布式调度系统。
 
+模型格式转换不属于评测自动流程。需要把目标 Backend 不支持的 checkpoint 生成独立
+派生物时，由使用者显式运行项目一级工具：
+
+```bash
+python tools/model_convert.py inspect /data/OWNER/MODEL
+python tools/model_convert.py routes
+python tools/model_convert.py convert --help
+```
+
+它不会由 `eval-manager` 自动调用，也不会覆盖原模型或已有输出。具体路线和派生 Model
+登记规则见[配置指南](configuration.md)。
+
 ## 结果产品
 
 默认运行名：
@@ -273,7 +285,8 @@ model_evaluation_template/
 │   └── commands/            # CLI 命令层
 ├── config/                  # 用户维护的 System、Model、Evaluation
 ├── tests/                   # 单元、集成与静态边界测试
-├── scripts/                 # 发布、脱敏检查与结果视图工具
+├── scripts/                 # 发布、脱敏检查与结果视图自动化
+├── tools/                   # 独立的手动检查、转换和校验工具
 ├── results/                 # 运行产物；不进入 wheel/发布 ZIP
 └── eval-manager             # 源码树入口
 ```

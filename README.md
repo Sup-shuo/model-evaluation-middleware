@@ -202,6 +202,20 @@ locking. At larger scale, Slurm, Kubernetes, Ray, or an internal scheduler
 should consume exported child plans instead of turning this project into a
 distributed scheduler.
 
+Model-format conversion is not part of the automatic evaluation workflow.
+When a Backend cannot load a checkpoint format, the operator must explicitly
+use the root-level manual tool to create a separate derivative:
+
+```bash
+python tools/model_convert.py inspect /data/OWNER/MODEL
+python tools/model_convert.py routes
+python tools/model_convert.py convert --help
+```
+
+`eval-manager` never invokes this tool. It does not overwrite the source model
+or an existing output. See the [configuration guide](docs/configuration.md) for
+routes and derivative Model registration rules.
+
 ## Result product
 
 Default run name:
@@ -288,7 +302,8 @@ model-evaluation-middleware/
 │   └── commands/            # CLI command layer
 ├── config/                  # User-maintained System, Model, and Evaluation files
 ├── tests/                   # Unit, integration, and static boundary tests
-├── scripts/                 # Release, privacy, and result-view tools
+├── scripts/                 # Release, privacy, and result-view automation
+├── tools/                   # Standalone manual inspection/conversion utilities
 ├── results/                 # Runtime output; excluded from wheel and release ZIP
 └── eval-manager             # Source-tree entry point
 ```

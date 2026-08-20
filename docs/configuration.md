@@ -116,10 +116,34 @@ managed Backend 使用 System `models.root` 与 `source.ref` 定位已物化目�
 权重尚未下载时可以先登记身份，但不要根据仓库名称猜 architecture、quantization、
 format 或 context。物化后以 `config.json`、Tokenizer 和权重索引为准。
 
-若目标 Backend 不支持原量化格式，`scripts/model_conversion/` 提供非破坏性转换工具。
+若目标 Backend 不支持原量化格式，项目一级 `tools/model_convert.py` 提供人工转换入口。
+它与 `eval-manager` 完全分离：`validate`、`doctor`、`check`、`plan` 和 `run` 都不会
+自动转换模型。先只读检查实际 checkpoint 元数据与可选路线：
+
+```bash
+python tools/model_convert.py inspect /data/OWNER/MODEL
+python tools/model_convert.py routes
+```
+
+转换必须由使用者显式选择路线、来源和新的输出目录。例如：
+
+```bash
+python tools/model_convert.py convert \
+  --route compressed-tensors-to-bf16 \
+  --source /data/OWNER/MODEL \
+  --output /data/OWNER/MODEL-derived-bf16 \
+  --source-ref OWNER/MODEL
+```
+
+可先加 `--dry-run` 查看将要调用的内部实现。工具根据 `config.json` 判断真实量化方法，
+不会根据仓库名中的 `AWQ` 字样猜测，也不会把 compressed-tensors 直接改名成 AWQ。
+转换实现写入同级临时目录，完成内置的结构、张量和加载检查后才原子发布，并拒绝覆盖
+已有目录；失败时保留临时目录供人工检查，不删除来源。
+
 派生物必须使用新的 Model ID，不改写原目录；只有完成键/形状、逐张量等价和目标
 Backend smoke 后，才能将其列为可用物料。多模态模型的纯文本派生物必须明确标记视觉
-能力已经移除。
+能力已经移除。`tools/model_conversion/` 保存统一入口使用的转换与校验实现；
+`tools/model_convert.py` 是唯一公开入口，不是自动工作流。
 
 ## Evaluation
 

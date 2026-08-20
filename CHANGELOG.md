@@ -12,6 +12,9 @@
   result-publication path as real evaluations.
 - Added project-relative cache roots and refreshed the configuration and result
   documentation without changing the System/Model/Evaluation ownership boundary.
+- Added an explicitly invoked, non-destructive checkpoint inspection and Qwen
+  conversion toolkit. It remains separate from `eval-manager`, never converts
+  automatically, and refuses to overwrite source or existing output paths.
 
 ### Adapter coverage
 

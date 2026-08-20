@@ -23,10 +23,10 @@ TOP_LEVEL_EXCLUDED = {
     ".git",
     ".pytest_cache",
 }
-# These are operational conversion/verification tools.  They are part of the
-# source/release ZIP so a model transformation can be repeated, but they are
-# not imported by the installed runtime wheel.
-SOURCE_TOOL_DIR = Path("scripts") / "model_conversion"
+# Operational tools are part of the source/release ZIP so an explicitly
+# requested model transformation can be repeated. They are not imported by
+# eval-manager and are not packaged into the runtime wheel.
+SOURCE_TOOL_DIR = Path("tools")
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".zip"}
 
 
@@ -158,7 +158,7 @@ def validate_tree(root: Path) -> None:
     bounded([sys.executable, "tests/static_contract_check.py"], root)
     conversion_tools = root / SOURCE_TOOL_DIR
     if conversion_tools.is_dir():
-        for tool in sorted(conversion_tools.glob("*.py")):
+        for tool in sorted(conversion_tools.rglob("*.py")):
             bounded(
                 [
                     sys.executable,
