@@ -5,22 +5,28 @@
 一个面向工程团队的模型评测胶水层：把硬件、运行环境、推理 Backend、模型、
 数据集与评测框架连接成可记录、可复现、可迁移的执行链，并交付统一结果产品。
 
-**English summary:** a configuration-driven glue layer for recording and
-reproducing model evaluations across hardware, inference backends and evaluation
-frameworks. It orchestrates existing tools and publishes a stable result product;
-it is not an inference engine, benchmark implementation or tamper-proof evidence
-system.
+```mermaid
+flowchart LR
+    CONFIG["配置<br/>System · Model · Evaluation"]
+    CORE["Core<br/>校验 · 检查 · 规划 · 运行"]
+    ADAPTERS["Adapters<br/>硬件 · Backend · Dataset · Evaluator"]
+    ENV["运行环境<br/>CPU / GPU / NPU · 推理框架与评测框架"]
+    RESULTS["结果产品<br/>result · metrics · raw · config · logs"]
 
-```text
-System + Model + Evaluation
-            ↓
- validate / doctor / plan / resource check
-            ↓
- Device → Runtime → Environment → Backend
-            ↓
- Dataset → Binding → Evaluator
-            ↓
- result.json + metrics.json + raw/ + logs/
+    CONFIG --> CORE --> ADAPTERS --> ENV
+    ENV --> CORE --> RESULTS
+
+    classDef config fill:#e8f1ff,stroke:#2563eb,color:#0f172a;
+    classDef core fill:#ede9fe,stroke:#7c3aed,color:#0f172a;
+    classDef adapter fill:#fff7ed,stroke:#ea580c,color:#0f172a;
+    classDef external fill:#ecfdf5,stroke:#059669,color:#0f172a;
+    classDef product fill:#f8fafc,stroke:#334155,color:#0f172a;
+
+    class CONFIG config;
+    class CORE core;
+    class ADAPTERS adapter;
+    class ENV external;
+    class RESULTS product;
 ```
 
 ## 10 秒建立感知：不需要 GPU/NPU
@@ -274,7 +280,7 @@ Evaluator。每个 Adapter 是一个带 `manifest.json` 的 JSON-over-stdio 子�
 ## 项目结构
 
 ```text
-model_evaluation_template/
+model-evaluation-middleware/
 ├── model_evaluation/        # 单一可安装 Python 包
 │   ├── core/                # 配置、规划、执行、资源和结果整理
 │   ├── adapters/            # 内置 Adapter
@@ -285,7 +291,7 @@ model_evaluation_template/
 │   └── commands/            # CLI 命令层
 ├── config/                  # 用户维护的 System、Model、Evaluation
 ├── tests/                   # 单元、集成与静态边界测试
-├── scripts/                 # 发布、脱敏检查与结果视图自动化
+├── scripts/                 # 项目发布与结果视图自动化脚本
 ├── tools/                   # 独立的手动检查、转换和校验工具
 ├── results/                 # 运行产物；不进入 wheel/发布 ZIP
 └── eval-manager             # 源码树入口

@@ -1,40 +1,50 @@
 # Model Evaluation Middleware
 
-[简体中文](docs/README.zh-CN.md)
+[Chinese (Simplified)](docs/README.zh-CN.md)
 
-A configuration-driven glue layer for recording and reproducing model
-evaluations across hardware, inference backends, models, datasets, and
-evaluation frameworks. It orchestrates existing tools and publishes a stable
-result product; it is not an inference engine, benchmark implementation, or
-tamper-proof evidence system.
+A model-evaluation glue layer for engineering teams. It connects hardware,
+runtime environments, inference backends, models, datasets, and evaluation
+frameworks into a recordable, reproducible, and portable execution path, then
+publishes a consistent result product.
 
-```text
-System + Model + Evaluation
-            ↓
- validate / doctor / plan / resource check
-            ↓
- Device → Runtime → Environment → Backend
-            ↓
- Dataset → Binding → Evaluator
-            ↓
- result.json + metrics.json + raw/ + logs/
+```mermaid
+flowchart LR
+    CONFIG["Configuration<br/>System · Model · Evaluation"]
+    CORE["Core<br/>Validate · Check · Plan · Run"]
+    ADAPTERS["Adapters<br/>Hardware · Backend · Dataset · Evaluator"]
+    ENV["Execution environment<br/>CPU / GPU / NPU · inference and evaluation frameworks"]
+    RESULTS["Result product<br/>result · metrics · raw · config · logs"]
+
+    CONFIG --> CORE --> ADAPTERS --> ENV
+    ENV --> CORE --> RESULTS
+
+    classDef config fill:#e8f1ff,stroke:#2563eb,color:#0f172a;
+    classDef core fill:#ede9fe,stroke:#7c3aed,color:#0f172a;
+    classDef adapter fill:#fff7ed,stroke:#ea580c,color:#0f172a;
+    classDef external fill:#ecfdf5,stroke:#059669,color:#0f172a;
+    classDef product fill:#f8fafc,stroke:#334155,color:#0f172a;
+
+    class CONFIG config;
+    class CORE core;
+    class ADAPTERS adapter;
+    class ENV external;
+    class RESULTS product;
 ```
 
-## Try it in 10 seconds — no GPU or NPU required
+## Understand the project in 10 seconds, without a GPU or NPU
 
-Install the controller dependencies and run the self-contained demo from the
-repository root:
+Install the Controller dependencies and run this from the repository root:
 
 ```bash
 python -m pip install -r requirements.txt
 ./eval-manager demo
 ```
 
-The demo uses the CPU Runtime, loopback Reference Backend, `dataset/virtual`,
+`demo` uses the CPU Runtime, a loopback Reference Backend, `dataset/virtual`,
 `binding/reference_eval`, and `evaluator/reference_eval`. It still exercises
-the production configuration resolver, Matrix planner, process manager, result
-publisher, and consistency checks. It downloads no model, uses no network, and
-typically finishes within 10 seconds:
+the real configuration parser, Matrix, process management, result publication,
+and consistency validation. It does not download a model, access the network,
+or use a physical GPU/NPU. It normally returns within 10 seconds:
 
 ```json
 {
@@ -53,43 +63,43 @@ typically finishes within 10 seconds:
 }
 ```
 
-The demo produces a normal result directory. `contract_ok=1` only means that
-the middleware path completed; it is **not a model quality score** and does not
-claim that any physical accelerator or evaluation framework was validated.
+The demo still creates a normal result directory. `contract_ok=1` only means
+that the glue pipeline completed. It is **not a model-quality score** and does
+not claim that any physical hardware or real evaluation framework passed.
 
-## Scope
+## Project scope
 
-| This project does | This project does not |
+| In scope | Out of scope |
 |---|---|
-| Resolve System, Model, and Evaluation configuration | Download or train models |
+| Parse System, Model, and Evaluation configurations | Download or train models |
 | Discover devices, runtimes, and execution environments | Reimplement inference engines |
-| Start or attach to a Backend and verify required capabilities | Reimplement benchmarks |
-| Bind Datasets to Evaluators | Schedule distributed clusters |
-| Save effective configuration, versions, complete metrics, and raw output | Provide model governance or experiment tracking |
-| Clean up processes that it started | Provide forensics, tamper resistance, or trusted evidence |
+| Start or connect to a Backend and validate required capabilities | Reimplement benchmarks |
+| Bind a Dataset to an Evaluator | Distributed cluster scheduling |
+| Save effective configuration, versions, complete metrics, and raw output | Model governance or experiment-tracking platforms |
+| Clean up processes started by this project after failure | Forensics, tamper resistance, or trusted proof |
 
-Here, reproducibility means recording the effective configuration and
-observable runtime versions so that the evaluation can be reconstructed on
-another machine. It does not promise bit-level equality across hardware and
-does not turn results into cryptographic evidence.
+Here, “reproducible” means recording the effective configuration and observable
+runtime versions so that an evaluation can be reconstructed on another machine.
+It does not promise bit-level equality across hardware and does not present
+results as tamper-proof evidence.
 
 ## Current validation coverage
 
 | Level | Current coverage | Meaning |
 |---|---|---|
-| Full hardware E2E | NVIDIA A100/CUDA and Cambricon MLU/Neuware; vLLM + lm-eval + BBH | 24 tasks, 5,761 samples, result publication, and cleanup passed |
-| Hardware smoke E2E | MetaX C500/MACA; vLLM-MetaX + lm-eval + BBH | Single-device service and 24-subtask smoke passed; this is not a full accuracy evaluation |
-| Mock E2E | CPU + Reference Backend/Evaluator + virtual Dataset | Software execution and result-product path passed |
+| Full real-machine E2E | NVIDIA A100/CUDA and Cambricon MLU/Neuware; vLLM + lm-eval + BBH | 24 tasks, 5,761 samples, result publication, and cleanup passed |
+| Real-machine smoke E2E | MetaX C500/MACA; vLLM-MetaX + lm-eval + BBH | Single-device service and 24-subtask smoke passed; this is not a full accuracy evaluation |
+| Mock E2E | CPU + Reference Backend/Evaluator + virtual Dataset | Software execution and result-product pipeline passed |
 | Contract-tested | AMD/ROCm, Ascend/CANN, Ollama, llama.cpp, generic OpenAI, and others | Manifest, Schema, RPC, and planning behavior passed; this is not production hardware validation |
 
-The project therefore has broad protocol coverage and focused hardware
-coverage. The presence of an Adapter does not mean that every combination has
-passed production validation. See the [compatibility matrix](docs/compatibility.md)
-and [sanitized hardware records](docs/validation/) for exact claims.
+The protocol surface is intentionally broader than the current real-machine
+coverage. The presence of an Adapter directory does not mean that combination
+has completed production validation. See the [compatibility matrix](docs/compatibility.md)
+and [sanitized machine records](docs/validation/) for precise claims.
 
-## Installation and first real evaluation
+## Installation and the first real evaluation
 
-Python 3.10 or newer is required. From source:
+Python 3.10 or newer is required. For a source checkout:
 
 ```bash
 python -m pip install -r requirements.txt
@@ -97,7 +107,7 @@ python -m pip install -r requirements.txt
 ./eval-manager adapters
 ```
 
-After installing a wheel, the same CLI is available as a console script:
+After installing the wheel, use the console script with the same name:
 
 ```bash
 eval-manager schema-check
@@ -111,8 +121,8 @@ cd my-evaluation
 eval-manager init . --hardware nvidia
 ```
 
-`--hardware` also supports `metax`, `mlu`, `amd`, `ascend`, and `cpu`. Replace
-the generated `REPLACE_WITH_*` placeholders, check the configuration, and run:
+`--hardware` also accepts `metax`, `mlu`, `amd`, `ascend`, and `cpu`. Replace
+the generated `REPLACE_WITH_*` values, check the configuration, and then run:
 
 ```bash
 eval-manager check \
@@ -125,24 +135,24 @@ eval-manager run \
 ```
 
 `check` combines configuration validation, Doctor, plan preview, and read-only
-resource checks without starting a model service. For step-by-step diagnosis,
+resource checks without starting the model service. For step-by-step diagnosis,
 use `validate`, `doctor`, `plan`, and `explain` separately.
 
-## Three configuration layers
+## Three configuration types
 
-| Configuration | Question it answers | It should not contain |
+| Configuration | Question it answers | Must not contain |
 |---|---|---|
-| System | What does this machine provide, where is it, and which environments should be used? | Model experiment identity or benchmark selection |
-| Model | What is this model and how should each Backend load it? | Device indices, machine paths, or memory utilization |
-| Evaluation | Which models and benchmarks are selected for this run, and what temporary overrides apply? | Long-lived model definitions or driver installation details |
+| System | What does this machine provide, where is it, and which environments should be used? | Model experiment identity or benchmark selections |
+| Model | What is this model, and how should a particular Backend load it? | Device IDs, machine paths, or GPU memory ratios |
+| Evaluation | Which models and benchmarks are selected for this run, and what is temporarily overridden? | Long-lived model definitions or driver-installation details |
 
 Typical layout:
 
 ```text
 config/
 ├── systems/                 # NVIDIA, MLU, MetaX, and other machine profiles
-├── models/                  # One model per file; group by family or provider
-├── evaluations/             # Smoke, full, and one-off experiment selections
+├── models/                  # One model per file; may be grouped by family/provider
+├── evaluations/             # Smoke, full, and one-off evaluation selections
 ├── system.yaml              # Generic template used by init
 └── evaluation.yaml          # Generic template used by init
 ```
@@ -156,23 +166,24 @@ only the System changes:
 ```
 
 Machine paths, devices, Runtime, Backend/Evaluator environments, and capacity
-settings belong to System. Model source, architecture, quantization, context,
-and Backend-specific loading options belong to Model. Seeds, sample limits, and
-selection belong to Evaluation. See the [configuration guide](docs/configuration.md)
-for fields, override precedence, cache behavior, and reproducibility rules.
+parameters belong to System. Model source, architecture, quantization, context,
+and Backend-namespaced loading parameters belong to Model. Seeds, sample limits,
+and selections for the current run belong to Evaluation. See the
+[configuration guide](docs/configuration.md) for fields, precedence, caching,
+and reproduction rules.
 
-`model_evaluation/presets/` contains internal normalization presets shipped with
-the package; it is not a second user-configuration system. Normal users maintain
-only the root `config/`. `model_evaluation/examples/mock/` provides the
-self-contained installed `demo`.
+`model_evaluation/presets/` contains packaged normalization defaults, not a
+second user-configuration tree. Users normally maintain only the root-level
+`config/`. `model_evaluation/examples/mock/` provides the self-contained
+installed `demo` example.
 
 ## Common workflows
 
 ```bash
-# Hardware-free demo with a final JSON report
+# Hardware-free demo that returns the final JSON report
 ./eval-manager demo
 
-# Complete pre-run check; use --format json for automation
+# Complete pre-run checks; use --format json for automation
 ./eval-manager check --system-config mlu --evaluation-config smoke_bbh_08b
 
 # Explain why the current combination can run or is blocked
@@ -182,25 +193,25 @@ self-contained installed `demo`.
 ./eval-manager plan --system-config mlu --evaluation-config smoke_bbh_08b -o /tmp/plan.json
 ./eval-manager run  --system-config mlu --evaluation-config smoke_bbh_08b
 
-# Validate and inspect a completed result
+# Validate and inspect a final result
 ./eval-manager result-check results/<run-id>
 ./eval-manager inspect results/<run-id>
 ./eval-manager inspect results/<run-id> --format json
 ```
 
-Other entry points:
+Other commands:
 
-- `init`: create a project skeleton without overwriting existing files;
+- `init`: create a minimal project skeleton without overwriting files;
 - `schema-check` / `adapters`: inspect Core Schemas and discovered Adapters;
 - `adapter-check`: validate an external Adapter root before installation;
 - `environment-snapshot`: optionally export the Controller Python environment;
 - `matrix-export`: shard a saved Matrix plan for an external scheduler;
 - `run-plan` / `run-matrix-plan`: execute saved plans or resume a batch.
 
-Core deliberately remains a single-node, serial Matrix executor with resource
-locking. At larger scale, Slurm, Kubernetes, Ray, or an internal scheduler
-should consume exported child plans instead of turning this project into a
-distributed scheduler.
+Core remains a single-host, serial Matrix executor with resource locks. At
+larger scale, Slurm, Kubernetes, Ray, or an internal scheduler should consume
+the exported child plans instead of turning this project into a distributed
+scheduler.
 
 Model-format conversion is not part of the automatic evaluation workflow.
 When a Backend cannot load a checkpoint format, the operator must explicitly
@@ -224,23 +235,23 @@ Default run name:
 <platform>_<model-id>_<backend>_<benchmark-id>_YYMMDD-HHMM
 ```
 
-Results are written to the project-level `results/` directory:
+Results are written under the project-level `results/` directory:
 
 ```text
 results/<run-id>/
 ├── result.json              # Run identity and normalized summary
 ├── metrics.json             # Summary, group, and per-task metrics
-├── terminal.json            # Final outcome, local time, and cleanup status
-├── failure.json             # Present only on failure
+├── terminal.json            # Final state, local time, and cleanup result
+├── failure.json             # Present only after failure
 ├── raw/                     # Complete framework-native output
-├── samples/                 # Present only when explicitly enabled and emitted
+├── samples/                 # Present only when explicitly enabled and produced
 ├── config/                  # Effective configuration and observable versions
 └── logs/                    # Backend and Evaluator logs
 ```
 
-The four top-level JSON objects each have an independent Schema. `result-check`
-and `inspect` validate Schemas, cross-file identity and metric consistency,
-success/failure rules, and public artifact path boundaries. They do not provide
+Each of the four top-level JSON files has an independent Schema. `result-check`
+and `inspect` validate their Schemas, cross-file identity and metric consistency,
+success/failure rules, and public artifact-path boundaries. They do not produce
 cryptographic proof.
 
 Python applications can consume the same protocol directly:
@@ -255,8 +266,8 @@ runtime = run.runtime()
 artifacts = run.artifacts()
 ```
 
-See the [result-product protocol](docs/result-product.md). To create a terminal
-summary or report view:
+See the [result product protocol](docs/result-product.md). To create a terminal
+or report view from an existing result:
 
 ```bash
 python scripts/print_result.py results/<run-id> \
@@ -264,8 +275,8 @@ python scripts/print_result.py results/<run-id> \
   --svg results/<run-id>/result-summary.svg
 ```
 
-TXT and SVG files only project an existing result. They do not recompute scores
-and are not proof artifacts.
+The TXT/SVG files are projections of saved results. They do not recompute the
+score and are not proof artifacts.
 
 ## Adapter extensions
 
@@ -281,12 +292,12 @@ being committed to this repository:
 "backend.my_engine" = "my_eval_plugin.adapters.backend.my_engine"
 ```
 
-During development, `MODEL_EVAL_ADAPTER_PATHS` can point to one or more absolute
-Adapter roots. Startup fails if built-in, development, or installed entry-point
-Adapters declare the same kind/name; silent replacement is not allowed.
+During development, `MODEL_EVAL_ADAPTER_PATHS` may contain one or more absolute
+Adapter roots. Duplicate kind/name pairs across built-ins, development roots,
+and installed entry points are rejected instead of being silently overridden.
 
-See [Architecture and Adapter Protocol](ARCHITECTURE_AND_ADAPTER_PROTOCOL.md)
-for extension objects, RPCs, failure semantics, and review checklists.
+See the [architecture and Adapter protocol](ARCHITECTURE_AND_ADAPTER_PROTOCOL.md)
+for extension objects, RPCs, failure semantics, and checklists.
 
 ## Repository layout
 
@@ -296,37 +307,38 @@ model-evaluation-middleware/
 │   ├── core/                # Configuration, planning, execution, resources, results
 │   ├── adapters/            # Built-in Adapters
 │   ├── sdk/                 # Stable SDK for external Adapters
-│   ├── schemas/             # Public object and user-configuration Schemas
+│   ├── schemas/             # Public-object and user-configuration Schemas
 │   ├── presets/             # Internal normalization presets
-│   ├── examples/mock/       # Hardware-free demo shipped in the wheel
+│   ├── examples/mock/       # Hardware-free demo packaged in the wheel
 │   └── commands/            # CLI command layer
 ├── config/                  # User-maintained System, Model, and Evaluation files
-├── tests/                   # Unit, integration, and static boundary tests
-├── scripts/                 # Release, privacy, and result-view automation
-├── tools/                   # Standalone manual inspection/conversion utilities
-├── results/                 # Runtime output; excluded from wheel and release ZIP
+├── tests/                   # Unit, integration, and static-boundary tests
+├── scripts/                 # Project release and result-view automation
+├── tools/                   # Standalone manual inspection/conversion tools
+├── results/                 # Generated output; excluded from wheel/release ZIP
 └── eval-manager             # Source-tree entry point
 ```
 
-This is a single-package application repository, so it does not keep a `src/`
-wrapper containing only one package. Internal directories follow actual
-responsibilities instead of merging Core, Adapters, and protocols merely to
-reduce the directory count.
+This is a single-package application repository, so it does not keep a
+redundant `src/` wrapper containing only one package. Source code is grouped by
+real responsibilities rather than merging Core, Adapters, and protocols merely
+to reduce the directory count.
 
 ## Documentation
 
-- [中文 README](docs/README.zh-CN.md)
-- [Configuration guide](docs/configuration.md)
-- [Result-product protocol](docs/result-product.md)
-- [Compatibility matrix](docs/compatibility.md)
-- Sanitized hardware records: [NVIDIA A100](docs/validation/nvidia-a100.md),
+- [Configuration guide](docs/configuration.md): System / Model / Evaluation,
+  caching, and reproduction;
+- [Result product protocol](docs/result-product.md): final JSON and Python API;
+- [Compatibility matrix](docs/compatibility.md): real-machine, Mock, and
+  contract-tested boundaries;
+- [NVIDIA A100](docs/validation/nvidia-a100.md),
   [Cambricon MLU](docs/validation/cambricon-mlu.md), and
-  [MetaX C500](docs/validation/metax-c500.md)
-- [Architecture and Adapter Protocol](ARCHITECTURE_AND_ADAPTER_PROTOCOL.md)
-- [Contributing](CONTRIBUTING.md), [Security](SECURITY.md), and
-  [Changelog](CHANGELOG.md)
+  [MetaX C500](docs/validation/metax-c500.md): sanitized machine records;
+- [Architecture and Adapter protocol](ARCHITECTURE_AND_ADAPTER_PROTOCOL.md);
+- [Contributing](CONTRIBUTING.md), [security boundary](SECURITY.md), and
+  [changelog](CHANGELOG.md).
 
-Development checks:
+Development verification:
 
 ```bash
 python3 -m unittest discover -s tests -p 'test_*.py'
