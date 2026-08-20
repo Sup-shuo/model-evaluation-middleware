@@ -7,29 +7,7 @@ runtime environments, inference backends, models, datasets, and evaluation
 frameworks into a recordable, reproducible, and portable execution path, then
 publishes a consistent result product.
 
-```mermaid
-flowchart LR
-    CONFIG["Configuration<br/>System · Model · Evaluation"]
-    CORE["Core<br/>Validate · Check · Plan · Run"]
-    ADAPTERS["Adapters<br/>Hardware · Backend · Dataset · Evaluator"]
-    ENV["Execution environment<br/>CPU / GPU / NPU · inference and evaluation frameworks"]
-    RESULTS["Result product<br/>result · metrics · raw · config · logs"]
-
-    CONFIG --> CORE --> ADAPTERS --> ENV
-    ENV --> CORE --> RESULTS
-
-    classDef config fill:#e8f1ff,stroke:#2563eb,color:#0f172a;
-    classDef core fill:#ede9fe,stroke:#7c3aed,color:#0f172a;
-    classDef adapter fill:#fff7ed,stroke:#ea580c,color:#0f172a;
-    classDef external fill:#ecfdf5,stroke:#059669,color:#0f172a;
-    classDef product fill:#f8fafc,stroke:#334155,color:#0f172a;
-
-    class CONFIG config;
-    class CORE core;
-    class ADAPTERS adapter;
-    class ENV external;
-    class RESULTS product;
-```
+![Model Evaluation Middleware architecture](docs/assets/architecture.svg)
 
 ## Understand the project in 10 seconds, without a GPU or NPU
 

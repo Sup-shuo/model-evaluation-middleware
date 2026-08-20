@@ -5,29 +5,7 @@
 一个面向工程团队的模型评测胶水层：把硬件、运行环境、推理 Backend、模型、
 数据集与评测框架连接成可记录、可复现、可迁移的执行链，并交付统一结果产品。
 
-```mermaid
-flowchart LR
-    CONFIG["配置<br/>System · Model · Evaluation"]
-    CORE["Core<br/>校验 · 检查 · 规划 · 运行"]
-    ADAPTERS["Adapters<br/>硬件 · Backend · Dataset · Evaluator"]
-    ENV["运行环境<br/>CPU / GPU / NPU · 推理框架与评测框架"]
-    RESULTS["结果产品<br/>result · metrics · raw · config · logs"]
-
-    CONFIG --> CORE --> ADAPTERS --> ENV
-    ENV --> CORE --> RESULTS
-
-    classDef config fill:#e8f1ff,stroke:#2563eb,color:#0f172a;
-    classDef core fill:#ede9fe,stroke:#7c3aed,color:#0f172a;
-    classDef adapter fill:#fff7ed,stroke:#ea580c,color:#0f172a;
-    classDef external fill:#ecfdf5,stroke:#059669,color:#0f172a;
-    classDef product fill:#f8fafc,stroke:#334155,color:#0f172a;
-
-    class CONFIG config;
-    class CORE core;
-    class ADAPTERS adapter;
-    class ENV external;
-    class RESULTS product;
-```
+![模型评测胶水层架构](assets/architecture.zh-CN.svg)
 
 ## 10 秒建立感知：不需要 GPU/NPU
 

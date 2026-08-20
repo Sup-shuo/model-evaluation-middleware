@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="640" viewBox="0 0 1600 640" role="img" aria-labelledby="title desc">
+  <title id="title">Model Evaluation Middleware architecture</title>
+  <desc id="desc">System, Model, and Evaluation configurations are resolved by the Core into one execution plan. Separate inference and evaluation adapter paths connect external frameworks through a model API, then publish a consistent result product.</desc>
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="7" stdDeviation="9" flood-color="#0f172a" flood-opacity="0.08"/></filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#64748b"/></marker>
+    <style>
+      .ui{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.h1{font-size:20px;font-weight:720;fill:#0f172a}.h2{font-size:15px;font-weight:700;fill:#334155}.body{font-size:14px;font-weight:500;fill:#475569}.small{font-size:12px;font-weight:600;fill:#64748b;letter-spacing:.3px}.chip{font-size:13px;font-weight:650;fill:#334155;text-anchor:middle;dominant-baseline:middle}.white{fill:#fff}
+    </style>
+  </defs>
+  <rect x="1" y="1" width="1598" height="638" rx="26" fill="#f8fafc" stroke="#e2e8f0"/>
+
+  <!-- Three independent inputs. -->
+  <g filter="url(#shadow)"><rect x="30" y="78" width="250" height="484" rx="22" fill="#fff" stroke="#bfdbfe"/></g>
+  <path d="M52 78h206a22 22 0 0 1 22 22v40H30v-40a22 22 0 0 1 22-22Z" fill="#2563eb"/>
+  <text class="ui white" x="155" y="111" font-size="18" font-weight="720" text-anchor="middle">Declarative input</text>
+  <rect x="54" y="165" width="202" height="98" rx="14" fill="#eff6ff" stroke="#bfdbfe"/>
+  <text class="ui h1" x="155" y="220" text-anchor="middle">System</text>
+  <rect x="54" y="282" width="202" height="98" rx="14" fill="#f5f3ff" stroke="#ddd6fe"/>
+  <text class="ui h1" x="155" y="337" text-anchor="middle">Model</text>
+  <rect x="54" y="399" width="202" height="126" rx="14" fill="#fff7ed" stroke="#fed7aa"/>
+  <text class="ui h1" x="155" y="468" text-anchor="middle">Evaluation</text>
+
+  <!-- Product boundary: Core and Adapters. -->
+  <rect x="326" y="45" width="900" height="550" rx="25" fill="#f4f3ff" stroke="#a5b4fc" stroke-width="1.5"/>
+  <rect x="615" y="27" width="322" height="37" rx="18.5" fill="#4338ca"/>
+  <text class="ui white" x="776" y="46" font-size="14" font-weight="720" text-anchor="middle" dominant-baseline="middle">MODEL EVALUATION MIDDLEWARE</text>
+  <g fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow)">
+    <path d="M256 214C302 214 304 137 365 137"/><path d="M256 331C304 331 304 174 365 174"/><path d="M256 462C306 462 305 211 365 211"/>
+  </g>
+
+  <!-- Core resolves inputs into one effective plan. -->
+  <g filter="url(#shadow)"><rect x="365" y="88" width="822" height="164" rx="19" fill="#fff" stroke="#c7d2fe"/></g>
+  <text class="ui h1" x="397" y="126">Core control plane</text>
+  <rect x="397" y="157" width="230" height="52" rx="12" fill="#eef2ff" stroke="#c7d2fe"/><text class="ui chip" x="512" y="184">Resolve &amp; validate</text>
+  <path d="M627 183h61" stroke="#818cf8" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <rect x="692" y="157" width="170" height="52" rx="12" fill="#eef2ff" stroke="#c7d2fe"/><text class="ui chip" x="777" y="184">Plan</text>
+  <path d="M862 183h61" stroke="#818cf8" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <rect x="927" y="157" width="228" height="52" rx="12" fill="#4338ca"/><text class="ui chip white" x="1041" y="184">Orchestrate</text>
+
+  <!-- One plan drives two decoupled adapter paths. -->
+  <path d="M776 252v32H385v32" stroke="#64748b" stroke-width="1.8" fill="none" marker-end="url(#arrow)"/>
+  <path d="M776 284H385v166" stroke="#64748b" stroke-width="1.8" fill="none" marker-end="url(#arrow)"/>
+  <text class="ui small" x="796" y="278">EXECUTION PLAN</text>
+
+  <text class="ui small" x="365" y="307">INFERENCE PATH</text>
+  <rect x="365" y="322" width="822" height="92" rx="17" fill="#fff" stroke="#bae6fd"/>
+  <rect x="400" y="337" width="360" height="62" rx="13" fill="#ecfeff" stroke="#a5f3fc"/><text class="ui h2" x="580" y="373" text-anchor="middle">Inference adapters</text>
+  <path d="M760 368h90" stroke="#0891b2" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <rect x="854" y="337" width="304" height="62" rx="13" fill="#dcfce7" stroke="#86efac"/><text class="ui h2" x="1006" y="373" text-anchor="middle">Model service</text>
+
+  <text class="ui small" x="365" y="441">EVALUATION PATH</text>
+  <rect x="365" y="456" width="822" height="92" rx="17" fill="#fff" stroke="#99f6e4"/>
+  <rect x="400" y="471" width="360" height="62" rx="13" fill="#f0fdfa" stroke="#99f6e4"/><text class="ui h2" x="580" y="507" text-anchor="middle">Evaluation adapters</text>
+  <path d="M760 502h90" stroke="#0f766e" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <rect x="854" y="471" width="304" height="62" rx="13" fill="#ccfbf1" stroke="#5eead4"/><text class="ui h2" x="1006" y="507" text-anchor="middle">Evaluation framework</text>
+
+  <!-- Evaluation calls the model service; neither is reimplemented here. -->
+  <path d="M1146 471C1192 446 1192 424 1146 399" fill="none" stroke="#0f766e" stroke-width="1.7" stroke-dasharray="5 5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text class="ui small" x="1173" y="432" text-anchor="middle" transform="rotate(-90 1173 432)">REQUEST / RESPONSE</text>
+
+  <!-- Stable result product. -->
+  <path d="M1187 502h84" fill="none" stroke="#64748b" stroke-width="1.9" marker-end="url(#arrow)"/>
+  <g filter="url(#shadow)"><rect x="1275" y="456" width="290" height="92" rx="18" fill="#fff7ed" stroke="#fb923c"/></g>
+  <text class="ui h1" x="1420" y="509" text-anchor="middle">Result product</text>
+</svg>
