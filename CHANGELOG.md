@@ -1,5 +1,19 @@
 # Changelog
 
+## 4.1.0-alpha33
+
+### Integration and documentation
+
+- Added contract-tested EvalScope Binding and Evaluator adapters for existing
+  OpenAI-compatible Chat Completions services.
+- Added task-oriented installation, component, configuration, model-catalog,
+  and Adapter extension guides while keeping deployment records private.
+- Extended the standalone model-conversion tool with structural Safetensors
+  readiness checks; it remains explicit, non-destructive, and outside normal
+  evaluation execution.
+- Retained the sanitized real MLU full-BBH result projection and reduced the
+  public model catalog to two portable examples.
+
 ## 4.1.0-alpha32
 
 ### Portable workflow and public API

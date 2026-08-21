@@ -1,0 +1,27 @@
+{
+  "adapter_api": "1.0",
+  "implementation": {
+    "language": "python"
+  },
+  "kind": "evaluator",
+  "name": "evalscope",
+  "operations": [
+    "requirements",
+    "plan_preflight",
+    "plan_evaluate",
+    "normalize",
+    "snapshot"
+  ],
+  "schema_versions": {
+    "canonical_result": "1.0",
+    "preflight_probe_result": "1.0",
+    "process_spec": "1.0",
+    "requirement_set": "1.0"
+  },
+  "user_config": {
+    "parameters_schema": "user_parameters.schema.json",
+    "root_required": false,
+    "schema_version": "1.0"
+  },
+  "version": "1.0.0"
+}

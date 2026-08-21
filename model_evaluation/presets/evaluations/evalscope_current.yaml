@@ -1,0 +1,23 @@
+schema_version: "1.1"
+id: evalscope_current
+framework:
+  adapter: evalscope
+parameters:
+  executable: evalscope
+  eval_batch_size: 8
+  seed: 42
+  temperature: 0.0
+  top_p: 1.0
+  top_k: 1
+  max_tokens: 512
+  request_timeout: 300
+  max_retries: 1
+  preflight_timeout_seconds: 60
+  evaluation_timeout_seconds: 86400
+  collect_perf: false
+  ignore_errors: false
+  metric_maps:
+    evalscope_gsm8k_smoke:
+      AverageAccuracy: accuracy
+binding:
+  adapter: evalscope

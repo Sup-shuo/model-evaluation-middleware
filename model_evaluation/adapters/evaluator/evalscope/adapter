@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+case "${1:-}" in
+  manifest) cat "${DIR}/manifest.json" ;;
+  invoke) exec "${MODEL_EVAL_CONTROLLER_PYTHON:-python3}" -B -S "${DIR}/invoke.py" invoke ;;
+  *) echo "usage: adapter {manifest|invoke}" >&2; exit 2 ;;
+esac

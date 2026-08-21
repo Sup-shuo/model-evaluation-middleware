@@ -18,6 +18,8 @@ from typing import Any
 
 
 IMPLEMENTATION_ROOT = Path(__file__).resolve().parent / "model_conversion"
+SAFETENSORS_INDEX = "model.safetensors.index.json"
+TRANSIENT_SUFFIXES = (".part", ".tmp", ".lock", ".incomplete")
 
 
 @dataclass(frozen=True)
@@ -98,6 +100,101 @@ def load_config(source: Path) -> dict[str, Any]:
     return value
 
 
+def inspect_checkpoint_files(source: Path) -> dict[str, Any]:
+    """Report structural readiness without claiming integrity or provenance."""
+
+    issues: list[str] = []
+    warnings: list[str] = []
+    index_path = source / SAFETENSORS_INDEX
+    shards = {
+        path.name: path
+        for path in sorted(source.glob("*.safetensors"))
+        if path.is_file()
+    }
+    transient = sorted(
+        path.relative_to(source).as_posix()
+        for path in source.rglob("*")
+        if path.is_file() and path.name.endswith(TRANSIENT_SUFFIXES)
+    )
+    zero_sized = sorted(name for name, path in shards.items() if path.stat().st_size == 0)
+    referenced: set[str] = set()
+    missing: list[str] = []
+    index_error: str | None = None
+
+    if index_path.is_file():
+        try:
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            weight_map = index.get("weight_map") if isinstance(index, dict) else None
+            if not isinstance(weight_map, dict) or not weight_map:
+                raise ValueError("weight_map must be a non-empty object")
+            if any(not isinstance(value, str) or not value for value in weight_map.values()):
+                raise ValueError("weight_map contains invalid shard names")
+            referenced = {str(value) for value in weight_map.values()}
+            unsafe = sorted(
+                name
+                for name in referenced
+                if Path(name).is_absolute()
+                or ".." in Path(name).parts
+                or Path(name).suffix != ".safetensors"
+            )
+            if unsafe:
+                raise ValueError(
+                    "weight_map contains unsafe or non-Safetensors shard paths: "
+                    + ", ".join(unsafe)
+                )
+            missing = sorted(
+                name
+                for name in referenced
+                if not (source / name).is_file() or (source / name).stat().st_size == 0
+            )
+        except (OSError, json.JSONDecodeError, ValueError) as error:
+            index_error = str(error)
+            referenced = set()
+            issues.append(f"invalid {SAFETENSORS_INDEX}: {error}")
+    elif len(shards) > 1:
+        issues.append("multiple Safetensors shards require model.safetensors.index.json")
+
+    if not shards:
+        issues.append("no Safetensors weight file found")
+    if missing:
+        issues.append("index references missing or empty shards: " + ", ".join(missing))
+    if zero_sized:
+        issues.append("empty Safetensors shards: " + ", ".join(zero_sized))
+
+    unindexed = sorted(set(shards) - referenced) if referenced else []
+    if unindexed and index_path.is_file() and index_error is None:
+        warnings.append("unreferenced Safetensors shards: " + ", ".join(unindexed))
+    if transient:
+        warnings.append("transient or incomplete files remain: " + ", ".join(transient))
+
+    counted = referenced if referenced and not missing else set(shards)
+    weight_size = sum(
+        (source / name).stat().st_size
+        for name in counted
+        if (source / name).is_file()
+    )
+    loadable = not issues
+    clean = loadable and not warnings
+    return {
+        "status": "complete" if clean else ("usable-with-warnings" if loadable else "incomplete"),
+        "loadable": loadable,
+        "clean": clean,
+        "weight_file_count": len(referenced or shards),
+        "weight_size_bytes": weight_size,
+        "weight_size_gib": round(weight_size / 1024**3, 3),
+        "index": {
+            "present": index_path.is_file(),
+            "referenced_shards": sorted(referenced),
+            "missing_shards": missing,
+            "unreferenced_shards": unindexed,
+        },
+        "transient_files": transient,
+        "issues": issues,
+        "warnings": warnings,
+        "scope": "structural-only-no-hash-no-backend-load",
+    }
+
+
 def inspect_checkpoint(source: Path) -> dict[str, Any]:
     source = source.resolve()
     config = load_config(source)
@@ -129,6 +226,7 @@ def inspect_checkpoint(source: Path) -> dict[str, Any]:
             for key in ("quant_method", "format", "bits", "group_size", "version")
             if quantization.get(key) is not None
         },
+        "checkpoint": inspect_checkpoint_files(source),
         "compatible_manual_routes": compatible_routes,
         "automatic_conversion": False,
     }
@@ -151,6 +249,15 @@ def validate_route(route: Route, inspection: dict[str, Any]) -> None:
         raise ValueError(
             f"route {route.name!r} requires quantization_method="
             f"{route.quantization_method!r}, found {quantization_method!r}"
+        )
+
+
+def require_loadable(inspection: dict[str, Any]) -> None:
+    checkpoint = inspection["checkpoint"]
+    if not checkpoint["loadable"]:
+        raise ValueError(
+            "source checkpoint is structurally incomplete: "
+            + "; ".join(checkpoint["issues"])
         )
 
 
@@ -178,6 +285,16 @@ def print_value(value: Any, output_format: str) -> None:
     print(f"model_type: {value['model_type'] or 'unknown'}")
     print(f"dtype: {value['dtype'] or 'unknown'}")
     print(f"quantization: {json.dumps(value['quantization'], ensure_ascii=False)}")
+    checkpoint = value["checkpoint"]
+    print(
+        "checkpoint: "
+        f"{checkpoint['status']} "
+        f"({checkpoint['weight_file_count']} files, {checkpoint['weight_size_gib']} GiB)"
+    )
+    for issue in checkpoint["issues"]:
+        print(f"issue: {issue}")
+    for warning in checkpoint["warnings"]:
+        print(f"warning: {warning}")
     routes = value["compatible_manual_routes"]
     print("compatible manual routes: " + (", ".join(routes) if routes else "none"))
     print("automatic conversion: disabled")
@@ -192,8 +309,6 @@ def conversion_command(args: argparse.Namespace) -> list[str]:
         if args.temporary is not None
         else output.with_name(f".{output.name}.converting")
     )
-    inspection = inspect_checkpoint(source)
-    validate_route(route, inspection)
     if source == output.resolve(strict=False) or source == temporary.resolve(strict=False):
         raise ValueError("source, temporary and output directories must be distinct")
     if temporary.parent != output.parent:
@@ -208,6 +323,10 @@ def conversion_command(args: argparse.Namespace) -> list[str]:
         raise ValueError(f"route {route.name!r} requires --contract")
     if not route.contract_required and args.contract is not None:
         raise ValueError(f"route {route.name!r} does not accept --contract")
+
+    inspection = inspect_checkpoint(source)
+    require_loadable(inspection)
+    validate_route(route, inspection)
 
     command = [
         str(args.python),
@@ -238,6 +357,7 @@ def verify_command(args: argparse.Namespace) -> list[str]:
             "full validation before publishing"
         )
     inspection = inspect_checkpoint(args.source.resolve())
+    require_loadable(inspection)
     validate_route(route, inspection)
     if not args.derived.is_dir():
         raise ValueError(f"derived checkpoint is not a directory: {args.derived}")
@@ -268,6 +388,13 @@ def parser() -> argparse.ArgumentParser:
     inspect = commands.add_parser("inspect", help="read checkpoint metadata without conversion")
     inspect.add_argument("source", type=Path)
     inspect.add_argument("--format", choices=("text", "json"), default="text")
+
+    check = commands.add_parser(
+        "check",
+        help="fail unless the local Safetensors checkpoint is structurally loadable",
+    )
+    check.add_argument("source", type=Path)
+    check.add_argument("--format", choices=("text", "json"), default="text")
 
     convert = commands.add_parser("convert", help="run one explicitly selected route")
     convert.add_argument("--route", choices=tuple(ROUTES), required=True)
@@ -301,8 +428,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "routes":
             print_value([route_payload(route) for route in ROUTES.values()], args.format)
             return 0
-        if args.command == "inspect":
-            print_value(inspect_checkpoint(args.source), args.format)
+        if args.command in {"inspect", "check"}:
+            inspection = inspect_checkpoint(args.source)
+            print_value(inspection, args.format)
+            if args.command == "check" and not inspection["checkpoint"]["loadable"]:
+                return 1
             return 0
         command = conversion_command(args) if args.command == "convert" else verify_command(args)
         if args.dry_run:

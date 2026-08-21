@@ -39,6 +39,7 @@ class ModelConvertToolTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        (source / "model.safetensors").write_bytes(b"structural-test-weight")
         return source
 
     def test_routes_are_explicit_and_never_automatic(self) -> None:
@@ -62,6 +63,9 @@ class ModelConvertToolTests(unittest.TestCase):
             self.assertEqual(inspected.returncode, 0, inspected.stderr)
             payload = json.loads(inspected.stdout)
             self.assertFalse(payload["automatic_conversion"])
+            self.assertTrue(payload["checkpoint"]["loadable"])
+            self.assertEqual(payload["checkpoint"]["status"], "complete")
+            self.assertGreater(payload["checkpoint"]["weight_size_bytes"], 0)
             self.assertEqual(
                 payload["compatible_manual_routes"],
                 [
@@ -102,6 +106,76 @@ class ModelConvertToolTests(unittest.TestCase):
             self.assertIn(str(root / ".derived.converting"), command)
             self.assertFalse(output.exists())
             self.assertFalse((root / ".derived.converting").exists())
+
+    def test_check_reports_missing_index_shards_and_transient_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source = self.checkpoint(
+                Path(temporary),
+                architecture="Qwen3_5ForConditionalGeneration",
+                quantization={"quant_method": "awq"},
+            )
+            (source / "model.safetensors").unlink()
+            (source / "model-00001-of-00002.safetensors").write_bytes(b"one")
+            (source / "download.incomplete").write_bytes(b"partial")
+            (source / "model.safetensors.index.json").write_text(
+                json.dumps(
+                    {
+                        "weight_map": {
+                            "layer.0.weight": "model-00001-of-00002.safetensors",
+                            "layer.1.weight": "model-00002-of-00002.safetensors",
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            completed = run_tool("check", str(source), "--format", "json")
+            self.assertEqual(completed.returncode, 1, completed.stderr)
+            payload = json.loads(completed.stdout)
+            self.assertFalse(payload["checkpoint"]["loadable"])
+            self.assertEqual(payload["checkpoint"]["status"], "incomplete")
+            self.assertEqual(
+                payload["checkpoint"]["index"]["missing_shards"],
+                ["model-00002-of-00002.safetensors"],
+            )
+            self.assertEqual(payload["checkpoint"]["transient_files"], ["download.incomplete"])
+
+    def test_check_allows_complete_index_but_reports_stale_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source = self.checkpoint(
+                Path(temporary),
+                architecture="Qwen3_5ForConditionalGeneration",
+                quantization={"quant_method": "awq"},
+            )
+            (source / "model.safetensors.index.json").write_text(
+                json.dumps({"weight_map": {"weight": "model.safetensors"}}),
+                encoding="utf-8",
+            )
+            (source / "old.safetensors.incomplete").write_bytes(b"stale")
+
+            completed = run_tool("check", str(source), "--format", "json")
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            payload = json.loads(completed.stdout)
+            self.assertTrue(payload["checkpoint"]["loadable"])
+            self.assertFalse(payload["checkpoint"]["clean"])
+            self.assertEqual(payload["checkpoint"]["status"], "usable-with-warnings")
+
+    def test_check_rejects_unsafe_index_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source = self.checkpoint(
+                Path(temporary),
+                architecture="Qwen3_5ForConditionalGeneration",
+                quantization={"quant_method": "awq"},
+            )
+            (source / "model.safetensors.index.json").write_text(
+                json.dumps({"weight_map": {"weight": "../outside.safetensors"}}),
+                encoding="utf-8",
+            )
+
+            completed = run_tool("check", str(source), "--format", "json")
+            self.assertEqual(completed.returncode, 1, completed.stderr)
+            payload = json.loads(completed.stdout)
+            self.assertIn("unsafe", payload["checkpoint"]["issues"][0])
 
     def test_route_mismatch_and_existing_output_fail_before_conversion(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

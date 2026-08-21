@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "evalscope.user_parameters.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "executable": {"type": "string", "minLength": 1},
+    "expected_version": {"type": "string", "minLength": 1},
+    "eval_batch_size": {"type": "integer", "minimum": 1},
+    "limit": {
+      "anyOf": [
+        {"type": "integer", "minimum": 1},
+        {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
+      ]
+    },
+    "seed": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "temperature": {"type": "number", "minimum": 0, "maximum": 2},
+    "top_p": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+    "top_k": {"type": "integer", "minimum": -1},
+    "max_tokens": {"type": "integer", "minimum": 1},
+    "request_timeout": {"type": "number", "exclusiveMinimum": 0},
+    "max_retries": {"type": "integer", "minimum": 0},
+    "preflight_timeout_seconds": {"type": "number", "exclusiveMinimum": 0},
+    "evaluation_timeout_seconds": {"type": "number", "exclusiveMinimum": 0},
+    "dataset_hub": {"enum": ["modelscope", "huggingface"]},
+    "ignore_errors": {"type": "boolean"},
+    "collect_perf": {"type": "boolean"},
+    "metric_maps": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

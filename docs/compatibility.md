@@ -12,6 +12,7 @@ with a production-validated stack.
 | AMD GPU | ROCm | Adapter contract only | — | Contract-tested |
 | Ascend NPU | CANN | Adapter contract only | — | Contract-tested |
 | OpenAI-compatible service | — | generic OpenAI Adapter | configured evaluator | Contract-tested |
+| OpenAI-compatible service | — | existing service Backend | EvalScope | Contract-tested; runtime smoke pending |
 | Local service | — | Ollama / llama.cpp | configured evaluator | Contract-tested |
 
 “Real full BBH E2E” means service startup, 24 BBH tasks, 5,761 effective

@@ -2,246 +2,182 @@
 
 [English](../README.md)
 
-一个面向工程团队的模型评测胶水层：把硬件、运行环境、推理 Backend、模型、
-数据集与评测框架连接成可记录、可复现、可迁移的执行链，并交付统一结果产品。
+面向工程团队的模型评测胶水层：连接硬件、Runtime、推理框架、模型、数据集和评测框架，
+把机器相关环境与可复用评测意图解析成统一执行计划，并输出一致的结果产品。
 
-![模型评测胶水层架构](assets/architecture.zh-CN.svg)
+![Model Evaluation Middleware 架构](assets/architecture.zh-CN.svg)
+
+## 从这里开始
+
+| 目标 | 文档 |
+|---|---|
+| 安装项目并完成第一次真实评测 | [安装与第一次评测](installation.md) |
+| 理解 System、Model、Evaluation 三类配置 | [配置总览](configuration.md) |
+| 配置硬件、推理框架、评测框架或数据集 | [组件与集成](components/index.md) |
+| 登记文本、量化、多模态或派生模型 | [模型指南](models/index.md) |
+| 查看内置能力与实际验证状态 | [兼容性矩阵](compatibility.md) |
+| 消费 JSON、Python、TXT 或 SVG 结果 | [结果产品协议](result-product.md) |
+| 新增外部或内置 Adapter | [Adapter 指南](adapters/index.md) |
 
 ## 快速开始：Mock 演示
 
-安装 Controller 依赖后，在仓库根目录执行：
+Mock 使用 CPU 和 Reference 组件运行真实配置、规划、进程和结果链路，不需要模型文件或
+GPU/NPU：
 
 ```bash
-python -m pip install -r requirements.txt
-./eval-manager demo
+python -m pip install -e .
+eval-manager demo --render-summary
 ```
 
-`demo` 使用 CPU Runtime、回环 Reference Backend、`dataset/virtual`、
-`binding/reference_eval` 和 `evaluator/reference_eval` 跑通完整控制链路，包括配置解析、
-Matrix 计划、进程管理、结果发布和一致性检查。它不需要模型文件或加速卡，通常在
-10 秒内返回：
+通常 10 秒内完成，并返回包含 `contract_ok=1` 的 JSON。该值表示中间件链路成功，不是
+模型质量分数。
 
-```json
-{
-  "demo": "reference",
-  "ok": true,
-  "report": {
-    "benchmark": "mock_demo",
-    "cleanup": "clean",
-    "framework": "reference_eval",
-    "model": "mock-model",
-    "outcome": "success",
-    "summary": {
-      "contract_ok": {"value": 1}
-    }
-  }
-}
-```
+## 适配能力摘要
 
-它生成的仍是正式结果目录。`contract_ok=1` 表示中间件链路跑通，不是模型能力指标。
+项目通过命名 Adapter 扩展。下表展示当前内置范围，`…` 表示后续可继续增加，而不需要
+修改 Core：
 
-## 结果产物示例
-
-下图来自 `coder3101/Qwen3.5-4B-heretic` 在 Cambricon MLU 上真实成功完成的完整
-BBH 评测：24 个 tasks、5761 条有效样本，`accuracy=0.555112`。硬件、框架版本、
-各任务指标、时间和模型信息均保持原样，仅把用户目录字段替换为 `<USER>`。
-
-![脱敏后的真实 MLU 完整 BBH 结果](assets/mlu-full-bbh-result-sanitized.svg)
-
-另有一份用于理解协议和消费者测试的合成 Schema 示例，位于
-[`examples/result_example/`](../examples/result_example/)。
-
-## 这个项目提供什么
-
-| 能力 | 中间件提供的内容 |
+| 层级 | 当前内置适配 |
 |---|---|
-| 可迁移配置 | 将机器相关的 System 与可复用的 Model、Evaluation 意图分离 |
-| 校验与计划 | 解析生效配置、检查兼容性，并在执行前预览资源与步骤 |
-| Adapter 编排 | 连接硬件、Runtime、执行环境、Backend、Dataset、Binding 与 Evaluator |
-| 执行管理 | 启动或接入模型服务、运行评测，并清理项目拥有的进程 |
-| 统一结果 | 发布归一化指标、框架原始输出、样本、配置、版本与日志 |
-| 复现支持 | 记录重建一次运行所需的生效输入和可观察运行环境 |
+| Hardware | CPU · NVIDIA GPU · Cambricon MLU · MetaX GPU · AMD GPU · Ascend NPU · … |
+| Runtime | CPU · CUDA · Neuware · MACA · ROCm · CANN · … |
+| 推理 Backend | vLLM · OpenAI-compatible service · Ollama · llama.cpp · Reference Backend · … |
+| Evaluator | lm-evaluation-harness · EvalScope · Reference Evaluator · … |
+| Dataset / Binding | BBH local · local files · virtual dataset · lm-eval bindings · EvalScope binding · … |
+| 模型物料 | Hugging Face/本地 Safetensors · BF16/FP16 · 量化模型 · Text/VL · 派生物料 · … |
 
-本项目负责协调已有推理与评测系统，不重新实现模型或 benchmark 逻辑，也不把结果
-包装成防篡改证据。
+“内置”只说明 Adapter 与协议已经存在，不代表所有组合都完成了实机验证。
+[兼容性矩阵](compatibility.md)会明确区分完整 E2E、实机 smoke 和 contract-tested。
+
+## 项目提供什么
+
+| 能力 | 行为 |
+|---|---|
+| 可移植配置 | 将机器相关 System 与可复用 Model、Evaluation 意图分离 |
+| 校验与计划 | 解析有效配置、检查兼容性并预览资源 |
+| Adapter 编排 | 连接 Device、Runtime、Environment、Backend、Dataset、Binding 和 Evaluator |
+| 托管执行 | 启动或连接服务、执行评测并清理自己拥有的进程 |
+| 统一结果 | 保存指标、框架原始输出、样本、有效配置、版本和日志 |
+| 复现支持 | 记录重新构造运行所需的输入和可观测环境信息 |
+
+中间件负责组织现有推理与评测系统；模型加载、请求语义、benchmark 定义和指标算法仍由
+对应框架负责。项目记录可复现实验，但不把结果包装成防篡改证据。
 
 ## 当前验证范围
 
-| 等级 | 当前范围 | 含义 |
-|---|---|---|
-| 实机完整 E2E | NVIDIA A100/CUDA、Cambricon MLU/Neuware、MetaX C500/MACA；vLLM + lm-eval + BBH | 24 个任务、5761 条样本、结果发布和清理通过 |
-| Mock E2E | CPU + Reference Backend/Evaluator + virtual Dataset | 软件执行与结果产品链路通过 |
-| Contract-tested | AMD/ROCm、Ascend/CANN、Ollama、llama.cpp、generic OpenAI 等 | Manifest、Schema、RPC 和计划行为已由自动化测试覆盖 |
+| 级别 | 已实际覆盖路径 |
+|---|---|
+| 完整实机 E2E | NVIDIA A100/CUDA、Cambricon MLU/Neuware；vLLM + lm-eval + 完整 BBH |
+| 实机 smoke E2E | MetaX C500/MACA；vLLM-MetaX + lm-eval + BBH smoke |
+| Mock E2E | CPU + Reference Backend/Evaluator + virtual Dataset |
+| Contract-tested | EvalScope、AMD/ROCm、Ascend/CANN、Ollama、llama.cpp、generic OpenAI 等 |
 
-[兼容性矩阵](compatibility.md)分别列出协议测试与实机验证范围；可复现的环境信息和
-执行命令见[脱敏实机记录](validation/)。
+详细环境与命令见 [NVIDIA A100](validation/nvidia-a100.md)、
+[Cambricon MLU](validation/cambricon-mlu.md) 和
+[MetaX C500](validation/metax-c500.md) 的脱敏记录。
 
-## 安装与第一次真实评测
+## 第一次真实评测
 
-要求 Python 3.10 或更高版本。源码方式：
-
-```bash
-python -m pip install -r requirements.txt
-./eval-manager schema-check
-./eval-manager adapters
-```
-
-安装 wheel 后使用同名 console script：
+源码目录安装：
 
 ```bash
+python -m pip install -e .
 eval-manager schema-check
+eval-manager adapters
 ```
 
-创建一个不会覆盖已有文件的最小工程：
+创建工程骨架、补全机器路径，运行只读检查后再执行：
 
 ```bash
-mkdir my-evaluation
+eval-manager init my-evaluation --hardware nvidia
 cd my-evaluation
-eval-manager init . --hardware nvidia
-```
 
-`--hardware` 也支持 `metax`、`mlu`、`amd`、`ascend` 和 `cpu`。填写生成文件中的
-`REPLACE_WITH_*` 后，先检查，再运行：
-
-```bash
 eval-manager check \
   --system-config config/system.yaml \
   --evaluation-config config/evaluation.yaml
 
 eval-manager run \
   --system-config config/system.yaml \
-  --evaluation-config config/evaluation.yaml
+  --evaluation-config config/evaluation.yaml \
+  --render-summary
 ```
 
-`check` 组合配置验证、Doctor、计划预览和只读资源检查，不启动模型服务。需要逐步排错
-时可分别执行 `validate`、`doctor`、`plan` 和 `explain`。
+[安装指南](installation.md)会继续说明 Controller、推理环境、评测环境、硬件、模型、
+benchmark、执行与结果检查的完整流程。
 
-## 三类配置
+## 三类用户配置
 
-| 配置 | 回答的问题 | 不应包含 |
+| 配置 | 描述内容 | 复用范围 |
 |---|---|---|
-| System | 这台机器有什么、在哪里、使用哪些环境 | 模型实验身份、benchmark 组合 |
-| Model | 这个模型是什么、针对某 Backend 如何加载 | 设备号、机器路径、显存比例 |
-| Evaluation | 这次选择哪些模型与 benchmark、临时覆盖什么 | 长期模型定义、驱动安装细节 |
-
-典型目录：
+| System | 硬件、Runtime、环境、Backend/Evaluator profile、模型根、缓存和结果路径 | 一台机器或一个部署 |
+| Model | 模型身份、来源、架构、格式、量化、上下文和 Backend 加载参数 | 跨机器复用 |
+| Evaluation | 本次模型、benchmark、profile、种子、limit 和临时覆盖 | 跨兼容机器复用 |
 
 ```text
 config/
-├── systems/                 # NVIDIA、MLU、MetaX 等机器配置
-├── models/                  # 一模型一文件，可按模型族/来源方分目录
-├── evaluations/             # smoke、完整评测和一次性实验选择
-├── system.yaml              # init 使用的通用模板
-└── evaluation.yaml          # init 使用的通用模板
+├── systems/                 # 机器配置
+├── models/                  # 模型目录，可按提供方/模型族分级
+├── evaluations/             # smoke、完整评测和一次性选择
+├── system.yaml              # init 通用模板
+└── evaluation.yaml          # init 通用模板
 ```
 
-Model 和 Evaluation 可以在不同机器保持字节不变，只替换 System：
-
-```bash
-./eval-manager check --system-config mlu --evaluation-config smoke_bbh_08b
-./eval-manager check --system-config nvidia --evaluation-config smoke_bbh_08b
-```
-
-机器路径、设备、Runtime、Backend/Evaluator 环境和容量参数属于 System。模型来源、
-架构、量化、上下文与按 Backend 命名的加载参数属于 Model。种子、样本限制和本次选择
-属于 Evaluation。完整字段、覆盖优先级、缓存与复现规则见
-[配置指南](configuration.md)。
-
-`model_evaluation/presets/` 是随包发布的内部规范化预设，不是第二套用户配置；普通用户
-只维护根目录 `config/`。`model_evaluation/examples/mock/` 只为安装态 `demo` 提供自包含
-示例。
+一份 System 可以登记多个命名 Backend/Evaluator 环境。Evaluation 每次只选择一个
+profile，未选环境不会启动。详见[选择与覆盖规则](configuration.md#selection-and-precedence)。
 
 ## 常用工作流
 
 ```bash
-# Mock 演示，直接输出最终 JSON 报告
-./eval-manager demo
+# 不启动服务，解释配置或资源为何不可运行
+./eval-manager explain --system-config nvidia --evaluation-config smoke_bbh_08b
 
-# 同时为成功 run 保存可选 TXT/SVG 投影视图
-./eval-manager demo --render-summary
+# 预览并保存执行计划
+./eval-manager plan --system-config nvidia --evaluation-config smoke_bbh_08b \
+  -o /tmp/plan.json
 
-# 完整的运行前检查；自动化使用 --format json
-./eval-manager check --system-config mlu --evaluation-config smoke_bbh_08b
-
-# 解释为什么当前组合可以运行或被阻止
-./eval-manager explain --system-config mlu --evaluation-config smoke_bbh_08b
-
-# 生成计划或执行评测
-./eval-manager plan --system-config mlu --evaluation-config smoke_bbh_08b -o /tmp/plan.json
-./eval-manager run --system-config mlu --evaluation-config smoke_bbh_08b \
+# 执行并保存可选 TXT/SVG 投影
+./eval-manager run --system-config nvidia --evaluation-config smoke_bbh_08b \
   --render-summary
 
-# 验证和查看最终结果
+# 验证并查看最终结果
 ./eval-manager result-check results/<run-id>
 ./eval-manager inspect results/<run-id>
-./eval-manager inspect results/<run-id> --format json
 ```
 
-其他入口：
+`check` 组合 validate、Doctor、plan preview 和只读资源检查；也可以分别使用
+`validate`、`doctor`、`plan` 和 `explain`。
 
-- `init`：生成不覆盖现有文件的工程骨架；
-- `schema-check` / `adapters`：查看 Core Schema 与已发现 Adapter；
-- `adapter-check`：在安装前独立检查一个外部 Adapter root；
-- `environment-snapshot`：可选导出 Controller Python 环境；
-- `matrix-export`：把已保存 Matrix plan 分片给外部调度器；
-- `run-plan` / `run-matrix-plan`：执行已保存计划或恢复批次。
-
-Core 保持单机、串行 Matrix 与资源锁定位。大规模任务应由 Slurm、Kubernetes、Ray 或
-内部调度器消费导出的 child plans，而不是让这个项目演变为分布式调度系统。
-
-模型格式转换不属于评测自动流程。需要把目标 Backend 不支持的 checkpoint 生成独立
-派生物时，由使用者显式运行项目一级工具：
-
-```bash
-python tools/model_convert.py inspect /data/OWNER/MODEL
-python tools/model_convert.py routes
-python tools/model_convert.py convert --help
-```
-
-它不会由 `eval-manager` 自动调用，也不会覆盖原模型或已有输出。具体路线和派生 Model
-登记规则见[配置指南](configuration.md)。
+大规模 Matrix 可以导出子计划交给 Slurm、Kubernetes、Ray 或内部调度器。Core 保持
+单机串行执行与资源锁，不扩张成分布式调度系统。
 
 ## 结果产品
 
-默认运行名：
+成功运行默认命名：
 
 ```text
 <platform>_<model-id>_<backend>_<benchmark-id>_YYMMDD-HHMM
 ```
 
-默认结果位于项目一级 `results/`：
-
 ```text
 results/<run-id>/
-├── result.json              # 运行身份和标准化 summary
-├── metrics.json             # summary、group 与每个 task 的指标
-├── terminal.json            # 最终状态、本地时间和清理结果
-├── failure.json             # 仅失败时存在
-├── raw/                     # 完整框架原始输出
-├── samples/                 # 仅显式启用且框架实际产出时存在
-├── config/                  # 实际配置与可观察运行版本
-├── logs/                    # Backend / Evaluator 日志
-├── result-summary.txt       # 可选的人类可读投影视图
-└── result-summary.svg       # 可选的终端风格投影视图
+├── result.json
+├── metrics.json
+├── terminal.json
+├── raw/
+├── samples/
+├── config/
+├── logs/
+├── result-summary.txt       # 可选投影
+└── result-summary.svg       # 可选投影
 ```
 
-仓库提供一份可通过 Schema 与一致性检查的合成脱敏示例：
-[`examples/result_example/`](../examples/result_example/)。其中包含公共 JSON、框架原始
-输出、samples、生效配置、日志和脱敏 TXT/SVG，但不包含真实评测分数或私有机器信息。
+失败运行增加 `failure.json`。每个公共 JSON 都有独立 Schema，并执行跨文件一致性检查。
+[`examples/result_example/`](../examples/result_example/) 提供完整合成示例；下图来自真实
+MLU 完整 BBH 结果，只替换了用户目录。
 
-它与真实 run 使用同一套检查命令：
+![脱敏真实 MLU 完整 BBH 结果](assets/mlu-full-bbh-result-sanitized.svg)
 
-```bash
-./eval-manager result-check \
-  examples/result_example/cpu_example-model_reference_example-benchmark_260101-1200
-./eval-manager inspect \
-  examples/result_example/cpu_example-model_reference_example-benchmark_260101-1200
-```
-
-四个顶层 JSON 各有独立 Schema。`result-check` 和 `inspect` 会检查 Schema、跨文件身份与
-指标一致性、成功/失败规则，以及公开产物路径约束。它们不做密码学证明。
-
-Python 程序可以直接消费同一协议：
+Python 程序可通过同一产品边界读取：
 
 ```python
 from model_evaluation.results import load_run
@@ -253,77 +189,39 @@ runtime = run.runtime()
 artifacts = run.artifacts()
 ```
 
-协议细节见[结果产品协议](result-product.md)。`demo`、`run`、`run-plan`、`matrix-run`
-和 `run-matrix-plan` 可使用 `--render-summary`，为每个成功 run 同时生成 TXT/SVG；失败
-run 保留正常 JSON/日志，不生成投影。不带该开关时，默认 JSON 结果产品完全不变。
-已有成功结果也可以稍后手动生成：
-
-```bash
-python scripts/print_result.py results/<run-id> \
-  --text results/<run-id>/result-summary.txt \
-  --svg results/<run-id>/result-summary.svg
-```
-
-TXT/SVG 只投影已有结果，不重算分数，也不是证明文件。
-
 ## Adapter 扩展
 
-七类 Adapter 分别处理 Device、Runtime、Environment、Backend、Dataset、Binding 和
-Evaluator。每个 Adapter 是一个带 `manifest.json` 的 JSON-over-stdio 子进程；Core
-不 import 厂商 SDK 或评测框架。
+七类 Adapter 分别覆盖 Device、Runtime、Environment、Backend、Dataset、Binding 和
+Evaluator。内置目录、开发态 root 与 Python entry point 都使用同一套版本化
+JSON-over-stdio 协议。
 
-第三方 Adapter 可以通过 Python entry point 自动发现，无需提交到主仓库：
-
-```toml
-[project.entry-points."model_evaluation.adapters"]
-"backend.my_engine" = "my_eval_plugin.adapters.backend.my_engine"
-```
-
-开发态还可通过 `MODEL_EVAL_ADAPTER_PATHS` 指定一个或多个绝对 Adapter root。内置、
-开发目录与已安装 entry point 出现同 kind/name 时会拒绝启动，不允许静默覆盖。
-
-扩展对象、RPC、失败语义和检查清单见
+先查看 [Adapter 清单](adapters/index.md)，再按
+[新增 Adapter](adapters/adding-an-adapter.md)操作。完整协议见
 [架构与 Adapter 协议](../ARCHITECTURE_AND_ADAPTER_PROTOCOL.md)。
 
 ## 项目结构
 
 ```text
 model-evaluation-middleware/
-├── model_evaluation/        # 单一可安装 Python 包
-│   ├── core/                # 配置、规划、执行、资源和结果整理
-│   ├── adapters/            # 内置 Adapter
-│   ├── sdk/                 # 外部 Adapter 的稳定 SDK
-│   ├── schemas/             # 公共对象与用户配置 Schema
-│   ├── presets/             # 内部规范化预设
-│   ├── examples/mock/       # wheel 内置的无硬件演示
-│   └── commands/            # CLI 命令层
-├── config/                  # 用户维护的 System、Model、Evaluation
-├── examples/result_example/ # 合成脱敏的最终结果示例
+├── model_evaluation/        # Core、SDK、Schema 与 Adapter
+├── config/                  # 用户 System、Model、Evaluation
+├── docs/                    # 分层使用、集成与验证文档
+├── examples/result_example/ # 合成结果产品示例
 ├── tests/                   # 单元、集成与静态边界测试
-├── scripts/                 # 项目发布与结果视图自动化脚本
-├── tools/                   # 独立的手动检查、转换和校验工具
-├── results/                 # 运行产物；不进入 wheel/发布 ZIP
+├── scripts/                 # 发布和结果视图自动化
+├── tools/                   # 独立人工检查/转换工具
 └── eval-manager             # 源码树入口
 ```
 
-这是单包应用仓库，不保留只有一个子包的 `src/` 包装层。源码内部按真实职责分层，不为
-减少目录数量而把 Core、Adapter 和协议混在一起。
-
 ## 文档导航
 
-- [配置指南](configuration.md)：System / Model / Evaluation、缓存与复现；
-- [结果产品协议](result-product.md)：最终 JSON 与 Python 消费接口；
-- [兼容性矩阵](compatibility.md)：实机、Mock 与 contract-tested 边界；
-- [NVIDIA A100](validation/nvidia-a100.md)、
-  [Cambricon MLU](validation/cambricon-mlu.md)、
-  [MetaX C500](validation/metax-c500.md)：脱敏实机记录；
-- [架构与 Adapter 协议](../ARCHITECTURE_AND_ADAPTER_PROTOCOL.md)；
-- [贡献指南](../CONTRIBUTING.md)、[安全边界](../SECURITY.md)、[版本变化](../CHANGELOG.md)。
-
-开发验证：
-
-```bash
-python3 -m unittest discover -s tests -p 'test_*.py'
-python3 tests/static_contract_check.py
-python3 scripts/build_release.py
-```
+- [文档索引](index.md)
+- [安装与第一次评测](installation.md)
+- [配置总览](configuration.md)
+- [组件与集成](components/index.md)
+- [模型指南](models/index.md)
+- [Adapter 指南](adapters/index.md)
+- [结果产品协议](result-product.md)
+- [兼容性矩阵](compatibility.md)
+- [贡献指南](../CONTRIBUTING.md)、[安全说明](../SECURITY.md)和
+  [版本变化](../CHANGELOG.md)

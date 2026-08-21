@@ -1,0 +1,16 @@
+schema_version: "1.0"
+id: evalscope_gsm8k_smoke
+dataset:
+  provider: virtual
+  revision: evalscope-native
+protocol:
+  task: gsm8k
+  split: test
+  fewshot: 0
+  inference: [generation]
+metrics: [accuracy]
+bindings:
+  evalscope: evalscope
+metadata:
+  purpose: EvalScope OpenAI-compatible API smoke; evaluator limit must remain explicit.
+  dataset_management: EvalScope resolves and caches the benchmark dataset.
