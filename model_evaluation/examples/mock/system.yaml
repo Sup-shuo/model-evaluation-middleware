@@ -1,4 +1,4 @@
-schema_version: "1.2"
+schema_version: "1.3"
 
 system:
   name: local-mock-demo
@@ -10,8 +10,6 @@ metadata:
 profiles:
   defaults:
     hardware: cpu
-    backend: reference
-    evaluator: reference_eval
 
   environment:
     current-python:

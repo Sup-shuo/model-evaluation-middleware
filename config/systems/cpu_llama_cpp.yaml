@@ -1,4 +1,4 @@
-schema_version: "1.2"
+schema_version: "1.3"
 
 # Generic CPU + llama.cpp example for a local GGUF checkpoint.
 system:
@@ -10,8 +10,6 @@ metadata:
 profiles:
   defaults:
     hardware: cpu
-    backend: llama_cpp
-    evaluator: lm_eval
 
   environment:
     backend:

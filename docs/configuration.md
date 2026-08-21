@@ -40,11 +40,12 @@ unique `id`, not by file path.
 
 ## Selection and precedence
 
-For Hardware, Backend, and Evaluator, an explicit
-`evaluation.profiles.<kind>` selection takes precedence over
-`system.profiles.defaults.<kind>`. Only selected profiles and the environments
-they reference enter the execution plan; registering another environment does
-not start or activate it.
+Evaluation must explicitly select `backend.profile` and `evaluator.profile`.
+System registers the available implementations and environments but does not
+silently choose either framework. Hardware may be selected through
+`evaluation.profiles.hardware`; otherwise the System hardware default, or its
+only registered hardware profile, is used. Only selected profiles and their
+referenced environments enter the plan.
 
 One-run overrides in Evaluation take precedence over reusable Model and System
 defaults without modifying either catalog entry. Identity-changing fields such
@@ -59,12 +60,12 @@ The CLI resolves configuration in this order:
 
 ## Ownership rules
 
-- Put device IDs, Runtime roots, executable paths, environments, ports,
-  concurrency, and capacity policy in System.
+- Put the exposed device pool, Runtime roots, executable paths, environments,
+  ports, concurrency, and capacity policy in System.
 - Put source, tokenizer, architecture, format, quantization, context, and
   stable Backend-specific loading requirements in Model.
-- Put benchmark choice, seeds, temporary limits, per-run profile selection,
-  and temporary parameter overrides in Evaluation.
+- Put Backend/Evaluator selection, benchmark choice, seeds, temporary limits,
+  per-model device counts, and temporary parameter overrides in Evaluation.
 - Put Dataset-to-framework behavior in Dataset/Binding Adapters and benchmark
   presets, not in machine profiles.
 

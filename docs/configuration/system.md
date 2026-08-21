@@ -5,7 +5,7 @@ exist, which execution environments and framework profiles are available, and
 where models, cache, and results live.
 
 ```yaml
-schema_version: "1.2"
+schema_version: "1.3"
 
 system:
   name: nvidia-vllm
@@ -17,8 +17,6 @@ metadata:
 profiles:
   defaults:
     hardware: nvidia
-    backend: vllm
-    evaluator: lm_eval
 
   environment:
     vllm-env:
@@ -77,8 +75,9 @@ hardware and path configuration.
 
 ## Rules that affect portability
 
-- `hardware.devices` is the machine default. A per-run resource selection may
-  override it, but Model files must never contain device IDs.
+- `hardware.devices` is the device pool this machine exposes to the middleware.
+  Evaluation may narrow/reorder the pool and assign a `device_count` per model;
+  reusable Model files must never contain physical device IDs.
 - Managed Backends declare `compatibility.runtime_families`; Core compares
   capabilities rather than guessing compatibility from profile names.
 - Backend and Evaluator may reference different environments.
@@ -98,9 +97,6 @@ Register each framework environment and profile under a distinct name:
 
 ```yaml
 profiles:
-  defaults:
-    evaluator: lm_eval
-
   environment:
     lm-eval-env:
       type: conda
@@ -124,8 +120,8 @@ profiles:
         expected_version: 1.10.0
 ```
 
-An Evaluation can select `evalscope`; the unused `lm_eval` profile remains
-inactive. For setup guidance see [Environment isolation](environments.md) and
+An Evaluation selects one explicitly with `evaluator.profile`; the unused
+profile remains inactive. For setup guidance see [Environment isolation](environments.md) and
 [Evaluation frameworks](../components/evaluators.md).
 
 ## Platform examples

@@ -12,6 +12,26 @@ PACKAGE_ROOT = ROOT / "model_evaluation"
 
 
 class PublicExampleTests(unittest.TestCase):
+    def test_user_examples_use_explicit_schema_13_profile_selection(self):
+        system_paths = [ROOT / "config" / "system.yaml"]
+        system_paths.extend(sorted((ROOT / "config" / "systems").glob("*.yaml")))
+        for path in system_paths:
+            system = load_yaml_strict(path.read_text(encoding="utf-8"))
+            self.assertEqual(system["schema_version"], "1.3", path.name)
+            defaults = (system.get("profiles") or {}).get("defaults") or {}
+            self.assertNotIn("backend", defaults, path.name)
+            self.assertNotIn("evaluator", defaults, path.name)
+
+        evaluation_paths = [ROOT / "config" / "evaluation.yaml"]
+        evaluation_paths.extend(sorted((ROOT / "config" / "evaluations").glob("*.yaml")))
+        for path in evaluation_paths:
+            evaluation = load_yaml_strict(path.read_text(encoding="utf-8"))
+            self.assertEqual(evaluation["schema_version"], "1.3", path.name)
+            self.assertIsInstance(evaluation.get("backend"), dict, path.name)
+            self.assertIsInstance(evaluation.get("evaluator"), dict, path.name)
+            self.assertTrue(evaluation["backend"].get("profile"), path.name)
+            self.assertTrue(evaluation["evaluator"].get("profile"), path.name)
+
     def test_examples_cover_two_models_and_multiple_execution_stacks(self):
         app = Application(PACKAGE_ROOT, ROOT)
         cases = [

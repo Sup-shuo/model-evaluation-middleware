@@ -39,7 +39,6 @@ class UserConfigTests(unittest.TestCase):
                 "environment": {"type": "current"},
             }
         }
-        defaults = {"backend": "remote_a", "evaluator": "lm_eval_a"}
         if two_profiles:
             backends["remote_b"] = {
                 "type": "generic_openai",
@@ -53,21 +52,23 @@ class UserConfigTests(unittest.TestCase):
                 "parameters": {"batch_size": 3},
             }
         system = {
-            "schema_version": "1.2",
+            "schema_version": "1.3",
             "system": {"name": "test-host"},
-            "profiles": {"defaults": defaults, "backend": backends, "evaluator": evaluators},
+            "profiles": {"backend": backends, "evaluator": evaluators},
             "models": {},
             "paths": {"cache": str(root / "cache"), "results": str(root / "results")},
         }
         evaluation = {
-            "schema_version": "1.2",
+            "schema_version": "1.3",
             "models": ["model-A", {"name": "model-B"}],
             "benchmarks": ["mmlu"],
+            "backend": {"profile": "remote_b" if two_profiles else "remote_a"},
+            "evaluator": {
+                "profile": "lm_eval_b" if two_profiles else "lm_eval_a",
+                "parameters": {"batch_size": 2} if two_profiles else {},
+            },
             "offline": True,
         }
-        if two_profiles:
-            evaluation["profiles"] = {"backend": "remote_b", "evaluator": "lm_eval_b"}
-            evaluation["evaluator"] = {"batch_size": 2}
         return system, evaluation
 
     def _managed_vllm_docs(
@@ -82,10 +83,10 @@ class UserConfigTests(unittest.TestCase):
         if compatibility is None:
             compatibility = [runtime]
         system = {
-            "schema_version": "1.2",
+            "schema_version": "1.3",
             "system": {"name": "managed-host"},
             "profiles": {
-                "defaults": {"hardware": "local", "backend": "vllm_local", "evaluator": "lm_eval_local"},
+                "defaults": {"hardware": "local"},
                 "hardware": {
                     "local": {
                         "type": device_type,
@@ -113,9 +114,11 @@ class UserConfigTests(unittest.TestCase):
             "paths": {"cache": str(root / "cache"), "results": str(root / "results")},
         }
         evaluation = {
-            "schema_version": "1.2",
+            "schema_version": "1.3",
             "models": ["model-A"],
             "benchmarks": ["mmlu"],
+            "backend": {"profile": "vllm_local"},
+            "evaluator": {"profile": "lm_eval_local"},
         }
         if devices is not None:
             evaluation["resources"] = {"devices": devices}
@@ -146,41 +149,41 @@ class UserConfigTests(unittest.TestCase):
             evaluation_spec = app.specs.resolve("evaluation", bundle.generated["evaluation_id"])
             self.assertEqual(evaluation_spec["parameters"]["batch_size"], 2)
 
-    def test_profile_defaults_are_used_when_evaluation_omits_selection(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td).resolve()
-            system, evaluation = self._external_docs(root)
-            evaluation.pop("profiles", None)
-            evaluation.pop("evaluator", None)
-            system_path, evaluation_path = self._write_docs(root, system, evaluation)
-            bundle = Application(PACKAGE_ROOT, ROOT).user_config.load(system_path, evaluation_path)
-            self.assertEqual(bundle.generated["selected_profiles"], {"backend": "remote_a", "evaluator": "lm_eval_a"})
-
-    def test_single_profile_per_kind_is_automatic_default(self):
+    def test_backend_selection_is_required_even_with_one_system_profile(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td).resolve()
             system, evaluation = self._external_docs(root, two_profiles=False)
-            system["profiles"].pop("defaults", None)
+            evaluation.pop("backend")
             system_path, evaluation_path = self._write_docs(root, system, evaluation)
-            bundle = Application(PACKAGE_ROOT, ROOT).user_config.load(system_path, evaluation_path)
-            self.assertEqual(bundle.generated["selected_profiles"], {"backend": "remote_a", "evaluator": "lm_eval_a"})
+            with self.assertRaises(Exception):
+                Application(PACKAGE_ROOT, ROOT).user_config.load(system_path, evaluation_path)
 
-    def test_multiple_profiles_without_default_or_selection_is_rejected(self):
+    def test_evaluator_selection_is_required_even_with_one_system_profile(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td).resolve()
+            system, evaluation = self._external_docs(root, two_profiles=False)
+            evaluation.pop("evaluator")
+            system_path, evaluation_path = self._write_docs(root, system, evaluation)
+            with self.assertRaises(Exception):
+                Application(PACKAGE_ROOT, ROOT).user_config.load(system_path, evaluation_path)
+
+    def test_system_backend_and_evaluator_defaults_are_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td).resolve()
             system, evaluation = self._external_docs(root)
-            system["profiles"].pop("defaults", None)
-            evaluation.pop("profiles", None)
-            evaluation.pop("evaluator", None)
+            system["profiles"]["defaults"] = {
+                "backend": "remote_a",
+                "evaluator": "lm_eval_a",
+            }
             system_path, evaluation_path = self._write_docs(root, system, evaluation)
-            with self.assertRaisesRegex(Exception, "多个 profile"):
+            with self.assertRaises(Exception):
                 Application(PACKAGE_ROOT, ROOT).user_config.load(system_path, evaluation_path)
 
     def test_unknown_profile_is_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td).resolve()
             system, evaluation = self._external_docs(root)
-            evaluation["profiles"]["backend"] = "missing_backend"
+            evaluation["backend"]["profile"] = "missing_backend"
             system_path, evaluation_path = self._write_docs(root, system, evaluation)
             with self.assertRaises(Exception):
                 Application(PACKAGE_ROOT, ROOT).user_config.load(system_path, evaluation_path)
@@ -190,12 +193,12 @@ class UserConfigTests(unittest.TestCase):
             root = Path(td).resolve()
             system, evaluation = self._external_docs(root)
             system["profiles"]["hardware"] = {"unused": {"type": "cpu", "runtime": {"type": "cpu"}}}
-            evaluation["profiles"]["hardware"] = "unused"
+            evaluation["profiles"] = {"hardware": "unused"}
             system_path, evaluation_path = self._write_docs(root, system, evaluation)
             with self.assertRaisesRegex(Exception, "不使用本地 Hardware profile"):
                 Application(PACKAGE_ROOT, ROOT).user_config.load(system_path, evaluation_path)
 
-            evaluation["profiles"].pop("hardware")
+            evaluation.pop("profiles")
             evaluation["resources"] = {"devices": [0]}
             _dump(evaluation_path, evaluation)
             with self.assertRaisesRegex(Exception, "不使用本地 resources.devices"):
@@ -273,7 +276,11 @@ class UserConfigTests(unittest.TestCase):
             system, evaluation = self._managed_vllm_docs(root, devices=["gpu-A", "gpu-B"])
             system_path, evaluation_path = self._write_docs(root, system, evaluation)
             bundle = Application(PACKAGE_ROOT, ROOT).user_config.load(system_path, evaluation_path)
-            self.assertEqual(bundle.matrix_spec["overrides"]["deployment"]["parameters"]["tensor_parallel_size"], 2)
+            model_id = next(iter(bundle.generated["model_ids"]))
+            self.assertEqual(
+                bundle.matrix_spec["per_model_overrides"][model_id]["deployment"]["parameters"]["tensor_parallel_size"],
+                2,
+            )
 
     def test_hardware_profile_devices_are_machine_default_and_evaluation_can_override(self):
         with tempfile.TemporaryDirectory() as td:
@@ -286,8 +293,9 @@ class UserConfigTests(unittest.TestCase):
             bundle = app.user_config.load(system_path, evaluation_path)
             platform = app.specs.resolve("platform", bundle.generated["platform_id"])
             self.assertEqual(platform["device"]["devices"], ["2", "gpu-B"])
+            model_id = next(iter(bundle.generated["model_ids"]))
             self.assertEqual(
-                bundle.matrix_spec["overrides"]["deployment"]["parameters"]["tensor_parallel_size"],
+                bundle.matrix_spec["per_model_overrides"][model_id]["deployment"]["parameters"]["tensor_parallel_size"],
                 2,
             )
 
@@ -297,10 +305,57 @@ class UserConfigTests(unittest.TestCase):
             bundle = app.user_config.load(system_path, evaluation_path)
             platform = app.specs.resolve("platform", bundle.generated["platform_id"])
             self.assertEqual(platform["device"]["devices"], ["0"])
+            model_id = next(iter(bundle.generated["model_ids"]))
             self.assertEqual(
-                bundle.matrix_spec["overrides"]["deployment"]["parameters"]["tensor_parallel_size"],
+                bundle.matrix_spec["per_model_overrides"][model_id]["deployment"]["parameters"]["tensor_parallel_size"],
                 1,
             )
+
+    def test_per_model_device_count_selects_from_system_pool_and_derives_tp(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td).resolve()
+            system, evaluation = self._managed_vllm_docs(root)
+            system["profiles"]["hardware"]["local"]["devices"] = [0, 1, 2]
+            evaluation["models"] = [
+                {"name": "small-model", "resources": {"device_count": 1}},
+                {"name": "large-model", "resources": {"device_count": 2}},
+            ]
+            system_path, evaluation_path = self._write_docs(root, system, evaluation)
+            bundle = Application(PACKAGE_ROOT, ROOT).user_config.load(system_path, evaluation_path)
+            by_label = {
+                label: bundle.matrix_spec["per_model_overrides"][model_id]
+                for model_id, label in bundle.generated["model_ids"].items()
+            }
+            self.assertEqual(by_label["small-model"]["platform"]["device"]["devices"], ["0"])
+            self.assertEqual(
+                by_label["small-model"]["deployment"]["parameters"]["tensor_parallel_size"],
+                1,
+            )
+            self.assertEqual(by_label["large-model"]["platform"]["device"]["devices"], ["0", "1"])
+            self.assertEqual(
+                by_label["large-model"]["deployment"]["parameters"]["tensor_parallel_size"],
+                2,
+            )
+
+    def test_per_model_device_count_requires_sufficient_explicit_system_pool(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td).resolve()
+            system, evaluation = self._managed_vllm_docs(root)
+            system["profiles"]["hardware"]["local"]["devices"] = [0]
+            evaluation["models"] = [
+                {"name": "large-model", "resources": {"device_count": 2}},
+            ]
+            system_path, evaluation_path = self._write_docs(root, system, evaluation)
+            with self.assertRaisesRegex(Exception, "超过可用设备池"):
+                Application(PACKAGE_ROOT, ROOT).user_config.load(system_path, evaluation_path)
+
+            system, evaluation = self._managed_vllm_docs(root)
+            evaluation["models"] = [
+                {"name": "large-model", "resources": {"device_count": 2}},
+            ]
+            system_path, evaluation_path = self._write_docs(root, system, evaluation)
+            with self.assertRaisesRegex(Exception, "显式提供 devices 设备池"):
+                Application(PACKAGE_ROOT, ROOT).user_config.load(system_path, evaluation_path)
 
     def test_same_catalog_model_and_evaluation_resolve_for_mlu_and_nvidia_systems(self):
         """Only the system document changes; model and evaluation stay byte-identical."""
@@ -320,11 +375,12 @@ class UserConfigTests(unittest.TestCase):
                 },
             })
             evaluation = {
-                "schema_version": "1.2",
+                "schema_version": "1.3",
                 "model_catalog": str(catalog),
                 "models": ["qwen-portable"],
                 "benchmarks": ["mmlu"],
-                "backend": {"seed": 1234},
+                "backend": {"profile": "inference", "parameters": {"seed": 1234}},
+                "evaluator": {"profile": "eval"},
             }
             evaluation_path = root / "evaluation.yaml"
             _dump(evaluation_path, evaluation)
@@ -336,10 +392,10 @@ class UserConfigTests(unittest.TestCase):
                 lm_root = host / "lm-eval"
                 (lm_root / "lm_eval").mkdir(parents=True)
                 system = {
-                    "schema_version": "1.2",
+                    "schema_version": "1.3",
                     "system": {"name": name},
                     "profiles": {
-                        "defaults": {"hardware": "accelerator", "backend": "inference", "evaluator": "eval"},
+                        "defaults": {"hardware": "accelerator"},
                         "hardware": {
                             "accelerator": {"type": device, "devices": [device_id], "runtime": {"type": runtime}}
                         },
@@ -393,7 +449,12 @@ class UserConfigTests(unittest.TestCase):
                 model_id = next(iter(bundle.generated["model_ids"]))
                 self.assertEqual(
                     bundle.matrix_spec["per_model_overrides"][model_id]["deployment"]["parameters"],
-                    {"max_model_len": 4096, "trust_remote_code": True},
+                    {
+                        "max_model_len": 4096,
+                        "trust_remote_code": True,
+                        "seed": 1234,
+                        "tensor_parallel_size": 1,
+                    },
                 )
 
     def test_machine_capacity_parameters_come_from_system_not_model(self):
@@ -433,7 +494,7 @@ class UserConfigTests(unittest.TestCase):
             system["models"] = {"root": str(root / "models-root")}
             evaluation["model_catalog"] = str(catalog)
             evaluation["models"] = ["qwen-portable"]
-            evaluation["backend"] = {"seed": 17}
+            evaluation["backend"]["parameters"] = {"seed": 17}
             system_path, evaluation_path = self._write_docs(root, system, evaluation)
             with patch.dict(os.environ, {"PATH": str(tools) + os.pathsep + os.environ.get("PATH", "")}):
                 matrix_plan, bundle = Application(PACKAGE_ROOT, ROOT).user_matrix_plan(
@@ -442,7 +503,7 @@ class UserConfigTests(unittest.TestCase):
             model_id = next(iter(bundle.generated["model_ids"]))
             self.assertEqual(
                 bundle.matrix_spec["per_model_overrides"][model_id]["deployment"]["parameters"],
-                {"max_model_len": 4096, "trust_remote_code": True},
+                {"max_model_len": 4096, "trust_remote_code": True, "seed": 17},
             )
             params = matrix_plan["plans"][0]["resolved"]["specs"]["deployment"]["parameters"]
             self.assertEqual(params["gpu_memory_utilization"], 0.3)
@@ -482,17 +543,19 @@ class UserConfigTests(unittest.TestCase):
             })
             evaluation_path = root / "evaluation.yaml"
             _dump(evaluation_path, {
-                "schema_version": "1.2",
+                "schema_version": "1.3",
                 "model_catalog": str(catalog),
                 "models": ["qwen-portable"],
                 "benchmarks": ["mmlu"],
+                "backend": {"profile": "vllm"},
+                "evaluator": {"profile": "lm_eval"},
             })
             system_path = root / "system.yaml"
             _dump(system_path, {
-                "schema_version": "1.2",
+                "schema_version": "1.3",
                 "system": {"name": "nvidia-test"},
                 "profiles": {
-                    "defaults": {"hardware": "nvidia", "backend": "vllm", "evaluator": "lm_eval"},
+                    "defaults": {"hardware": "nvidia"},
                     "hardware": {"nvidia": {"type": "nvidia", "devices": [0], "runtime": {"type": "cuda"}}},
                     "backend": {
                         "vllm": {
@@ -532,7 +595,11 @@ class UserConfigTests(unittest.TestCase):
             system["profiles"]["backend"]["vllm_local"]["parameters"] = {"tensor_parallel_size": 1}
             system_path, evaluation_path = self._write_docs(root, system, evaluation)
             bundle = Application(PACKAGE_ROOT, ROOT).user_config.load(system_path, evaluation_path)
-            self.assertNotIn("tensor_parallel_size", bundle.matrix_spec.get("overrides", {}).get("deployment", {}).get("parameters", {}))
+            model_id = next(iter(bundle.generated["model_ids"]))
+            self.assertNotIn(
+                "tensor_parallel_size",
+                bundle.matrix_spec.get("per_model_overrides", {}).get(model_id, {}).get("deployment", {}).get("parameters", {}),
+            )
             app = Application(PACKAGE_ROOT, ROOT)
             bundle = app.user_config.load(system_path, evaluation_path)
             dep = app.specs.resolve("deployment", bundle.generated["deployment_id"])
@@ -574,7 +641,7 @@ class UserConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td).resolve()
             system, evaluation = self._managed_vllm_docs(root)
-            evaluation["backend"] = {"max_modle_len": 8192}
+            evaluation["backend"]["parameters"] = {"max_modle_len": 8192}
             system_path, evaluation_path = self._write_docs(root, system, evaluation)
             with self.assertRaisesRegex(Exception, "max_modle_len"):
                 Application(PACKAGE_ROOT, ROOT).user_config.load(system_path, evaluation_path)
@@ -583,7 +650,7 @@ class UserConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td).resolve()
             system, evaluation = self._external_docs(root)
-            evaluation["evaluator"] = {"bacth_size": 4}
+            evaluation["evaluator"]["parameters"] = {"bacth_size": 4}
             system_path, evaluation_path = self._write_docs(root, system, evaluation)
             with self.assertRaisesRegex(Exception, "bacth_size"):
                 Application(PACKAGE_ROOT, ROOT).user_config.load(system_path, evaluation_path)
@@ -624,7 +691,7 @@ class UserConfigTests(unittest.TestCase):
             system["profiles"]["evaluator"]["lm_eval_b"]["preset"] = "lm_eval_current"
             system["profiles"]["evaluator"]["lm_eval_b"].pop("root")
             system["profiles"]["evaluator"]["lm_eval_b"].pop("parameters", None)
-            evaluation.pop("evaluator", None)
+            evaluation["evaluator"].pop("parameters", None)
             system_path, evaluation_path = self._write_docs(root, system, evaluation)
             with self.assertRaisesRegex(Exception, "type/preset 不一致"):
                 Application(PACKAGE_ROOT, ROOT).user_config.load(system_path, evaluation_path)
@@ -682,8 +749,7 @@ class UserConfigTests(unittest.TestCase):
             root = Path(td).resolve()
             system, evaluation = self._external_docs(root)
             system["profiles"]["evaluator"]["ref"] = {"type": "reference_eval", "environment": {"type": "current"}}
-            evaluation["profiles"]["evaluator"] = "ref"
-            evaluation.pop("evaluator", None)
+            evaluation["evaluator"] = {"profile": "ref"}
             system_path, evaluation_path = self._write_docs(root, system, evaluation)
             app = Application(PACKAGE_ROOT, ROOT)
             plan, bundle = app.user_matrix_plan(system_path, evaluation_path)
@@ -851,8 +917,10 @@ class UserConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td).resolve()
             evaluation={
-                'schema_version':'1.2','models':['model-A'],'benchmarks':['mmlu'],
+                'schema_version':'1.3','models':['model-A'],'benchmarks':['mmlu'],
                 'resources':{'devices':[0]},
+                'backend':{'profile':'vllm_local'},
+                'evaluator':{'profile':'lm_eval_local'},
             }
             evaluation_path=root/'evaluation.yaml'; _dump(evaluation_path,evaluation)
 
@@ -867,9 +935,9 @@ class UserConfigTests(unittest.TestCase):
                 model_root=host/'models'; (model_root/'model-A').mkdir(parents=True)
                 lm_root=host/'lm-harness'; (lm_root/'lm_eval').mkdir(parents=True)
                 system={
-                    'schema_version':'1.2','system':{'name':name},
+                    'schema_version':'1.3','system':{'name':name},
                     'profiles':{
-                        'defaults':{'hardware':'local','backend':'vllm_local','evaluator':'lm_eval_local'},
+                        'defaults':{'hardware':'local'},
                         'environment':profiles,
                         'hardware':{'local':{'type':'cpu','runtime':{'type':'cpu'}}},
                         'backend':{'vllm_local':{'type':'vllm','mode':'managed','compatibility':{'runtime_families':['cpu']},'environment':backend_env,'executable':'vllm'}},
@@ -985,10 +1053,12 @@ class UserConfigTests(unittest.TestCase):
                 'tokenizer':'coder3101/Qwen3.5-4B-heretic',
             })
             evaluation={
-                'schema_version':'1.2',
+                'schema_version':'1.3',
                 'model_catalog':str(catalog),
                 'models':['jackrong-negentropy-claude-opus47-4b'],
                 'benchmarks':['mmlu'],
+                'backend':{'profile':'vllm_local'},
+                'evaluator':{'profile':'lm_eval_local'},
             }
             evaluation_path=root/'evaluation.yaml'; _dump(evaluation_path,evaluation)
 
@@ -1037,7 +1107,10 @@ class UserConfigTests(unittest.TestCase):
             app=Application(PACKAGE_ROOT, ROOT); bundle=app.load_user_config(system_path,evaluation_path)
             generated_id=next(iter(bundle.generated['model_ids']))
             params=bundle.matrix_spec['per_model_overrides'][generated_id]['deployment']['parameters']
-            self.assertEqual(params,{'max_model_len':8192,'gpu_memory_utilization':0.6})
+            self.assertEqual(params,{
+                'max_model_len':8192,'gpu_memory_utilization':0.6,
+                'tensor_parallel_size':1,
+            })
             self.assertNotIn('context_length',params)
 
     def test_catalog_namespaced_backend_parameters_use_selected_adapter_schema(self):
@@ -1121,6 +1194,7 @@ class UserConfigTests(unittest.TestCase):
             patch=bundle.matrix_spec['per_model_overrides'][generated_id]
             self.assertEqual(patch['deployment']['parameters'],{
                 'max_model_len':8192,'gpu_memory_utilization':0.7,
+                'tensor_parallel_size':1,
             })
             self.assertEqual(patch['platform']['backend_environment']['profile'],str((root/'temporary').resolve()))
             self.assertEqual(yaml.safe_load(model_path.read_text()),original)
@@ -1161,20 +1235,19 @@ class UserConfigTests(unittest.TestCase):
             bundle=Application(PACKAGE_ROOT, ROOT).load_user_config(system_path,evaluation_path)
             self.assertEqual(set(bundle.generated['model_ids'].values()),{'registered','adhoc'})
 
-    def test_backend_evaluator_string_shorthand_selects_profiles(self):
+    def test_backend_evaluator_string_shorthand_is_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td).resolve(); system,evaluation=self._external_docs(root)
-            evaluation.pop('profiles',None); evaluation.pop('evaluator',None)
             evaluation['backend']='remote_b'; evaluation['evaluator']='lm_eval_b'
             system_path,evaluation_path=self._write_docs(root,system,evaluation)
-            bundle=Application(PACKAGE_ROOT, ROOT).load_user_config(system_path,evaluation_path)
-            self.assertEqual(bundle.generated['selected_profiles'],{'backend':'remote_b','evaluator':'lm_eval_b'})
+            with self.assertRaises(Exception):
+                Application(PACKAGE_ROOT, ROOT).load_user_config(system_path,evaluation_path)
 
     def test_lm_eval_limit_accepts_integer_count_and_fraction(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td).resolve(); system,evaluation=self._external_docs(root,two_profiles=False)
             for value in (1,0.25):
-                evaluation['evaluator']={'limit':value}
+                evaluation['evaluator']['parameters']={'limit':value}
                 system_path,evaluation_path=self._write_docs(root,system,evaluation)
                 app=Application(PACKAGE_ROOT, ROOT); bundle=app.load_user_config(system_path,evaluation_path)
                 evaluation_spec=app.specs.resolve('evaluation',bundle.generated['evaluation_id'])
@@ -1207,9 +1280,9 @@ class UserConfigTests(unittest.TestCase):
             lm_root=root/'lm-harness'; pkg=lm_root/'lm_eval'; pkg.mkdir(parents=True); (pkg/'__init__.py').write_text('VALUE=1\n')
             model_root=root/'models'; (model_root/'model-A').mkdir(parents=True)
             system={
-                'schema_version':'1.2','system':{'name':'doctor-host'},
+                'schema_version':'1.3','system':{'name':'doctor-host'},
                 'profiles':{
-                    'defaults':{'hardware':'local','backend':'vllm_local','evaluator':'lm_eval_local'},
+                    'defaults':{'hardware':'local'},
                     'environment':{
                         'backend':{'type':'venv','profile':str(backend_env)},
                         'eval':{'type':'venv','profile':str(eval_env)},
@@ -1221,7 +1294,12 @@ class UserConfigTests(unittest.TestCase):
                 'models':{'root':str(model_root)},
                 'paths':{'cache':str(root/'cache'),'results':str(root/'results')},
             }
-            evaluation={'schema_version':'1.2','models':['model-A'],'benchmarks':['mmlu'],'resources':{'devices':[0]}}
+            evaluation={
+                'schema_version':'1.3','models':['model-A'],'benchmarks':['mmlu'],
+                'resources':{'devices':[0]},
+                'backend':{'profile':'vllm_local'},
+                'evaluator':{'profile':'lm_eval_local'},
+            }
             system_path,evaluation_path=self._write_docs(root,system,evaluation)
             proc=subprocess.run([sys.executable,str(ROOT/'eval-manager'),'doctor','--format','json','--system-config',str(system_path),'--evaluation-config',str(evaluation_path)],cwd=ROOT,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=False,env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1'})
             self.assertEqual(proc.returncode,0,proc.stdout+proc.stderr)

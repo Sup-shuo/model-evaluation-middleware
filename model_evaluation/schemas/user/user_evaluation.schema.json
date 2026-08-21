@@ -6,11 +6,13 @@
   "required": [
     "schema_version",
     "models",
-    "benchmarks"
+    "benchmarks",
+    "backend",
+    "evaluator"
   ],
   "properties": {
     "schema_version": {
-      "const": "1.2"
+      "const": "1.3"
     },
     "model_catalog": {
       "type": "string",
@@ -20,9 +22,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "hardware": {"type": "string", "minLength": 1},
-        "backend": {"type": "string", "minLength": 1},
-        "evaluator": {"type": "string", "minLength": 1}
+        "hardware": {"type": "string", "minLength": 1}
       }
     },
     "models": {
@@ -59,18 +59,8 @@
         }
       }
     },
-    "backend": {
-      "oneOf": [
-        {"type": "string", "minLength": 1},
-        {"type": "object"}
-      ]
-    },
-    "evaluator": {
-      "oneOf": [
-        {"type": "string", "minLength": 1},
-        {"type": "object"}
-      ]
-    },
+    "backend": {"$ref": "#/$defs/profileSelection"},
+    "evaluator": {"$ref": "#/$defs/profileSelection"},
     "offline": {"type": "boolean"},
     "dataset_timeout_seconds": {"type": "number", "exclusiveMinimum": 0},
     "execution": {
@@ -127,6 +117,7 @@
         "model_location": {"type": "object", "minProperties": 1},
         "backend": {"type": "object"},
         "backends": {"$ref": "#/$defs/backends"},
+        "resources": {"$ref": "#/$defs/modelResources"},
         "environments": {"$ref": "#/$defs/environments"},
         "provenance": {"type": "object"},
         "metadata": {"type": "object"}
@@ -159,7 +150,8 @@
       "required": ["id"],
       "properties": {
         "id": {"type": "string", "minLength": 1},
-        "overrides": {"$ref": "#/$defs/modelOverrides"}
+        "overrides": {"$ref": "#/$defs/modelOverrides"},
+        "resources": {"$ref": "#/$defs/modelResources"}
       }
     },
     "inlineModel": {
@@ -200,6 +192,23 @@
       "properties": {
         "backend": {"$ref": "#/$defs/environment"},
         "evaluator": {"$ref": "#/$defs/environment"}
+      }
+    },
+    "modelResources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["device_count"],
+      "properties": {
+        "device_count": {"type": "integer", "minimum": 1}
+      }
+    },
+    "profileSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile"],
+      "properties": {
+        "profile": {"type": "string", "minLength": 1},
+        "parameters": {"type": "object"}
       }
     },
     "backends": {

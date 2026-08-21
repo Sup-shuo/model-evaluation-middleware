@@ -44,8 +44,9 @@ profiles:
 Select one for a run in Evaluation:
 
 ```yaml
-profiles:
-  evaluator: evalscope
+evaluator:
+  profile: evalscope
+  parameters: {}
 ```
 
 Unused environments are not activated. A separate environment is recommended

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Upgraded user System and Evaluation documents to schema 1.3: every run now
+  selects Backend and Evaluator profiles explicitly.
+- Added per-model `resources.device_count` allocation from the System device
+  pool, including Adapter-owned tensor-parallel derivation and validation.
+- Updated onboarding, Mock, public examples, documentation, and tests for the
+  new configuration contract.
+
 ## 4.1.0-alpha33
 
 ### Integration and documentation

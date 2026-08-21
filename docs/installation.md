@@ -126,7 +126,7 @@ derived examples are in the [Model guide](models/index.md).
 ## 7. Select the evaluation
 
 ```yaml
-schema_version: "1.2"
+schema_version: "1.3"
 
 models:
   - qwen35-08b-base
@@ -135,12 +135,16 @@ benchmarks:
   - bbh
 
 backend:
-  seed: 1234
+  profile: vllm
+  parameters:
+    seed: 1234
 
 evaluator:
-  batch_size: 1
-  limit: 1
-  log_samples: true
+  profile: lm_eval
+  parameters:
+    batch_size: 1
+    limit: 1
+    log_samples: true
 
 offline: true
 

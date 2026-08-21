@@ -122,8 +122,9 @@ config/
 └── evaluation.yaml          # init 通用模板
 ```
 
-一份 System 可以登记多个命名 Backend/Evaluator 环境。Evaluation 每次只选择一个
-profile，未选环境不会启动。详见[选择与覆盖规则](configuration.md#selection-and-precedence)。
+一份 System 可以登记多个命名 Backend/Evaluator 环境。Evaluation 必须为每次运行显式选择
+Backend 与 Evaluator；System 硬件 profile 提供设备池，Evaluation 可以按模型指定设备数量。
+未选环境不会启动。详见[选择与覆盖规则](configuration.md#selection-and-precedence)。
 
 ## 常用工作流
 

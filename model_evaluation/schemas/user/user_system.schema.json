@@ -228,14 +228,6 @@
         "defaults": {
           "additionalProperties": false,
           "properties": {
-            "backend": {
-              "minLength": 1,
-              "type": "string"
-            },
-            "evaluator": {
-              "minLength": 1,
-              "type": "string"
-            },
             "hardware": {
               "minLength": 1,
               "type": "string"
@@ -272,7 +264,7 @@
       "type": "object"
     },
     "schema_version": {
-      "const": "1.2"
+      "const": "1.3"
     },
     "system": {
       "additionalProperties": false,

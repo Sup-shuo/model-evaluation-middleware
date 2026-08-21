@@ -133,8 +133,10 @@ config/
 └── evaluation.yaml          # Generic init template
 ```
 
-A System may register multiple named Backend and Evaluator environments. An
-Evaluation selects the profile for one run; unused environments remain inert.
+A System may register multiple named Backend and Evaluator environments. Every
+Evaluation explicitly selects both profiles for one run; unused environments
+remain inert. System hardware profiles expose device pools, while an Evaluation
+may request a different device count for each model in a mixed-size batch.
 See [configuration precedence](docs/configuration.md#selection-and-precedence).
 
 ## Common workflow

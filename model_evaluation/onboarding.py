@@ -43,7 +43,7 @@ def _system_yaml(hardware: str) -> str:
         )
         runtime_parameters = f"\n        parameters:\n{values}"
     devices = "\n      devices: [0]" if hardware != "cpu" else ""
-    return f'''schema_version: "1.2"
+    return f'''schema_version: "1.3"
 
 system:
   name: {hardware}-local
@@ -54,8 +54,6 @@ metadata:
 profiles:
   defaults:
     hardware: local
-    backend: vllm
-    evaluator: lm_eval
 
   environment:
     controller:
@@ -108,7 +106,7 @@ provenance:
 '''
 
 
-_EVALUATION_YAML = '''schema_version: "1.2"
+_EVALUATION_YAML = '''schema_version: "1.3"
 
 models:
   - example-model
@@ -117,17 +115,21 @@ benchmarks:
   - bbh
 
 backend:
-  seed: 1234
-  pythonhashseed: 1234
+  profile: vllm
+  parameters:
+    seed: 1234
+    pythonhashseed: 1234
 
 evaluator:
-  batch_size: 1
-  random_seed: 0
-  numpy_random_seed: 1234
-  torch_random_seed: 1234
-  fewshot_random_seed: 1234
-  request_seed: 1234
-  pythonhashseed: 1234
+  profile: lm_eval
+  parameters:
+    batch_size: 1
+    random_seed: 0
+    numpy_random_seed: 1234
+    torch_random_seed: 1234
+    fewshot_random_seed: 1234
+    request_seed: 1234
+    pythonhashseed: 1234
 
 offline: true
 

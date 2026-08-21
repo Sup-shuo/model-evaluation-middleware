@@ -4,26 +4,32 @@ An Evaluation file selects reusable Model and benchmark identities and records
 the temporary choices for one experiment.
 
 ```yaml
-schema_version: "1.2"
+schema_version: "1.3"
 
 models:
-  - qwen35-08b-base
+  - id: qwen35-08b-base
+    resources:
+      device_count: 1
 
 benchmarks:
   - bbh
 
 backend:
-  seed: 1234
-  pythonhashseed: 1234
+  profile: vllm
+  parameters:
+    seed: 1234
+    pythonhashseed: 1234
 
 evaluator:
-  batch_size: 1
-  random_seed: 0
-  numpy_random_seed: 1234
-  torch_random_seed: 1234
-  fewshot_random_seed: 1234
-  request_seed: 1234
-  pythonhashseed: 1234
+  profile: lm_eval
+  parameters:
+    batch_size: 1
+    random_seed: 0
+    numpy_random_seed: 1234
+    torch_random_seed: 1234
+    fewshot_random_seed: 1234
+    request_seed: 1234
+    pythonhashseed: 1234
 
 offline: true
 
@@ -34,16 +40,47 @@ execution:
 
 ## Select profiles for one run
 
-System defaults are used unless Evaluation selects a named profile:
+Every Evaluation explicitly selects one registered inference Backend and one
+Evaluator. This keeps the execution intent visible in the file instead of
+silently inheriting framework choices from System:
 
 ```yaml
-profiles:
-  hardware: nvidia
-  backend: vllm
-  evaluator: evalscope
+backend:
+  profile: vllm
+
+evaluator:
+  profile: evalscope
 ```
 
-Only those profiles and their referenced environments enter the plan.
+System remains the machine inventory: it defines what those profile names mean
+and which environments they use. An optional `profiles.hardware` selects a
+hardware profile when the System registers more than one.
+
+## Device pool and per-model count
+
+`system.profiles.hardware.<name>.devices` is the physical device pool exposed
+to this middleware. Evaluation can request a different count for each model:
+
+```yaml
+models:
+  - id: qwen35-08b-base
+    resources:
+      device_count: 1
+  - id: qwen36-27b-derived-bf16
+    resources:
+      device_count: 2
+```
+
+For a managed Backend, Core assigns the first N devices from the selected pool.
+The vLLM Adapter derives `tensor_parallel_size` from that model's assigned
+count unless an explicit Backend parameter overrides it. A count larger than
+the pool fails during validation; the middleware does not guess capacity or
+spill inference to CPU. If `device_count` is omitted, that model keeps the
+entire selected pool.
+
+For a one-off run, top-level `resources.devices` can narrow or reorder the
+System pool before per-model counts are applied. Physical device IDs stay out
+of reusable Model catalog files.
 
 ## Temporary model override
 
@@ -66,8 +103,10 @@ An explicit small `evaluator.limit` is useful for connectivity smoke:
 
 ```yaml
 evaluator:
-  limit: 1
-  log_samples: true
+  profile: lm_eval
+  parameters:
+    limit: 1
+    log_samples: true
 ```
 
 Remove the limit for a full benchmark. A smoke run validates integration only;

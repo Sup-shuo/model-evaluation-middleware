@@ -28,7 +28,7 @@ profiles:
   hardware:
     nvidia:
       type: nvidia
-      devices: [0]
+      devices: [0, 1, 2, 3]
       runtime:
         type: cuda
         root: /usr/local/cuda
@@ -40,10 +40,12 @@ change between machines.
 
 ## Device selection and parallelism
 
-`hardware.devices` is the machine default. The selected device count may feed
-generic resource derivation such as tensor parallel size, subject to the
-Backend Adapter contract. The middleware does not silently choose another
-device, move work to CPU, or tune memory limits after a failure.
+`hardware.devices` is the ordered pool exposed by this System. Evaluation can
+set `models[].resources.device_count`; each model receives the first N devices
+from that pool. The selected count may feed Adapter-owned derivation such as
+vLLM tensor parallel size. A top-level `resources.devices` can explicitly
+narrow or reorder the pool for one run. The middleware does not silently choose
+another device, move work to CPU, or tune memory limits after a failure.
 
 Use `eval-manager check` and `eval-manager explain` to inspect the effective
 selection and resource advice before execution.

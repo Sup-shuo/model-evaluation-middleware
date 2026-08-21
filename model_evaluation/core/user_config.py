@@ -94,26 +94,6 @@ def _load_model_catalog(app, evaluation_path: Path, configured: object) -> tuple
     return catalog, root, True
 
 
-def _normalize_profile_shorthand(evaluation: dict[str, Any]) -> dict[str, Any]:
-    """Accept backend/evaluator strings as profile selectors; objects remain parameter overrides."""
-    out = copy.deepcopy(evaluation)
-    profiles = copy.deepcopy(out.get("profiles") or {})
-    for kind in ("backend", "evaluator"):
-        value = out.get(kind)
-        if not isinstance(value, str):
-            continue
-        existing = profiles.get(kind)
-        if existing is not None and str(existing) != value:
-            raise ConfigError(
-                f"evaluation.{kind}={value!r} 与 evaluation.profiles.{kind}={existing!r} 冲突"
-            )
-        profiles[kind] = value
-        out.pop(kind, None)
-    if profiles:
-        out["profiles"] = profiles
-    return out
-
-
 def _resolve_model_entries(app, evaluation: dict[str, Any], evaluation_path: Path) -> tuple[list[dict[str, Any]], Path, bool]:
     catalog, root, catalog_enabled = _load_model_catalog(
         app, evaluation_path, evaluation.get("model_catalog")
@@ -132,8 +112,14 @@ def _resolve_model_entries(app, evaluation: dict[str, Any], evaluation_path: Pat
                 row = {"ref": item}
         else:
             raw = copy.deepcopy(item)
+            run_resources = raw.pop("resources", None)
             catalog_id = raw.get("id")
-            if "overrides" in raw:
+            is_catalog_reference = bool(
+                catalog_enabled
+                and catalog_id in catalog
+                and set(raw).issubset({"id", "overrides"})
+            )
+            if is_catalog_reference:
                 overrides = raw.get("overrides") or {}
                 identity_fields = {
                     "id", "label", "source", "ref", "name", "source_type", "revision",
@@ -157,6 +143,8 @@ def _resolve_model_entries(app, evaluation: dict[str, Any], evaluation_path: Pat
                 row["id"] = str(catalog_id)
             else:
                 row = raw
+            if run_resources is not None:
+                row["_run_resources"] = run_resources
         row.pop("schema_version", None)
         rows.append(row)
     return rows, root, catalog_enabled
@@ -208,23 +196,54 @@ def _selected_profile(system: dict[str, Any], evaluation: dict[str, Any], kind: 
     table = profiles.get(kind) or {}
     if not table:
         raise ConfigError(f"system.profiles.{kind} 未登记任何 profile")
-    explicit = (evaluation.get("profiles") or {}).get(kind)
-    configured_default = (profiles.get("defaults") or {}).get(kind)
-    selected_raw = explicit or configured_default
+    if kind in {"backend", "evaluator"}:
+        selection = evaluation.get(kind) or {}
+        selected_raw = selection.get("profile") if isinstance(selection, dict) else None
+        label = f"evaluation.{kind}.profile"
+    else:
+        selected_raw = (evaluation.get("profiles") or {}).get(kind)
+        selected_raw = selected_raw or (profiles.get("defaults") or {}).get(kind)
+        label = f"evaluation.profiles.{kind}"
     if selected_raw is None:
-        if len(table) == 1:
+        if kind == "hardware" and len(table) == 1:
             selected_raw = next(iter(table))
         else:
             available = ", ".join(sorted(table))
             raise ConfigError(
-                f"{kind} 存在多个 profile，无法自动选择；请在 evaluation.profiles.{kind} "
-                f"或 system.profiles.defaults.{kind} 中指定。可选: {available}"
+                f"{label} 必须显式选择已登记的 profile；可选: {available}"
             )
     selected = str(selected_raw).strip()
     if selected not in table:
         available = ", ".join(sorted(table))
-        raise ConfigError(f"evaluation.profiles.{kind}={selected!r} 不存在；可选: {available}")
+        raise ConfigError(f"{label}={selected!r} 不存在；可选: {available}")
     return selected, copy.deepcopy(table[selected])
+
+
+def _model_devices(
+    resources: object,
+    *,
+    available_devices: list[str] | None,
+    mode: str,
+    label: str,
+) -> list[str] | None:
+    value = resources or {}
+    if not isinstance(value, dict):
+        raise ConfigError(f"{label}.resources 必须是 object")
+    count = value.get("device_count")
+    if count is None:
+        return copy.deepcopy(available_devices)
+    if mode != "managed":
+        raise ConfigError(f"{label}.resources.device_count 仅适用于 managed backend")
+    if available_devices is None:
+        raise ConfigError(
+            f"{label}.resources.device_count 需要 System hardware profile 显式提供 devices 设备池"
+        )
+    count = int(count)
+    if count > len(available_devices):
+        raise ConfigError(
+            f"{label}.resources.device_count={count} 超过可用设备池 {available_devices}"
+        )
+    return copy.deepcopy(available_devices[:count])
 
 
 def _adapter_user_config(client) -> dict[str, Any]:
@@ -488,7 +507,6 @@ class UserConfigResolver:
         evaluation = _load_yaml(evaluation_file)
         self.app.matrix_schemas.validate("user_system", system)
         self.app.matrix_schemas.validate("user_evaluation", evaluation)
-        evaluation = _normalize_profile_shorthand(evaluation)
         model_entries, model_catalog_root, model_catalog_enabled = _resolve_model_entries(
             self.app, evaluation, evaluation_file
         )
@@ -517,15 +535,17 @@ class UserConfigResolver:
             self.app, "backend", backend_type, backend_profile_parameters,
             f"system.profiles.backend.{backend_profile_id}.parameters",
         )
+        backend_run_parameters = copy.deepcopy((evaluation.get("backend") or {}).get("parameters") or {})
         _validate_adapter_user_parameters(
-            self.app, "backend", backend_type, evaluation.get("backend"), "evaluation.backend",
+            self.app, "backend", backend_type, backend_run_parameters, "evaluation.backend.parameters",
         )
         evaluator_client = _validate_adapter_user_parameters(
             self.app, "evaluator", evaluator_type, evaluator.get("parameters"),
             f"system.profiles.evaluator.{evaluator_profile_id}.parameters",
         )
+        evaluator_run_parameters = copy.deepcopy((evaluation.get("evaluator") or {}).get("parameters") or {})
         _validate_adapter_user_parameters(
-            self.app, "evaluator", evaluator_type, evaluation.get("evaluator"), "evaluation.evaluator",
+            self.app, "evaluator", evaluator_type, evaluator_run_parameters, "evaluation.evaluator.parameters",
         )
 
         mode = _backend_mode(backend, backend_client)
@@ -671,6 +691,7 @@ class UserConfigResolver:
         seen_ids: set[str] = set()
 
         for row in model_entries:
+            run_resources = copy.deepcopy(row.pop("_run_resources", None) or {})
             source_value = row.get("source")
             if source_value is not None and not isinstance(source_value, dict):
                 raise ConfigError("model source 必须是 object")
@@ -723,8 +744,24 @@ class UserConfigResolver:
                 backend_type=backend_type,
                 label=f"evaluation.models[{experiment_id}]",
             )
-            if model_backend_parameters:
-                patch["deployment"] = {"parameters": model_backend_parameters}
+            selected_model_devices = _model_devices(
+                run_resources,
+                available_devices=devices,
+                mode=mode,
+                label=f"evaluation.models[{experiment_id}]",
+            )
+            if run_resources:
+                patch["platform"] = {"device": {"devices": selected_model_devices}}
+            run_backend_parameters = _deep_merge(backend_run_parameters, model_backend_parameters)
+            run_backend_parameters = _derived_backend_parameters(
+                backend_client,
+                profile_parameters=backend_profile_parameters,
+                run_parameters=run_backend_parameters,
+                devices=selected_model_devices,
+                mode=mode,
+            )
+            if run_backend_parameters:
+                patch["deployment"] = {"parameters": run_backend_parameters}
             if row.get("model_location"):
                 patch.setdefault("deployment", {})["model_location"] = copy.deepcopy(row["model_location"])
             if mode in {"external", "attached"}:
@@ -763,17 +800,6 @@ class UserConfigResolver:
             global_overrides["offline"] = bool(evaluation["offline"])
         if "dataset_timeout_seconds" in evaluation:
             global_overrides["dataset_timeout_seconds"] = evaluation["dataset_timeout_seconds"]
-        profile_backend_parameters = copy.deepcopy(backend_profile_parameters)
-        backend_overrides = _derived_backend_parameters(
-            backend_client,
-            profile_parameters=profile_backend_parameters,
-            run_parameters=copy.deepcopy(evaluation.get("backend") or {}),
-            devices=devices,
-            mode=mode,
-        )
-        if backend_overrides:
-            global_overrides["deployment"] = {"parameters": backend_overrides}
-
         matrix: dict[str, Any] = {
             "schema_version": "1.0",
             "id": _slug(
@@ -922,8 +948,9 @@ class UserConfigResolver:
                 )
         if evaluator.get("parameters"):
             params = _deep_merge(params, evaluator["parameters"])
-        if evaluation.get("evaluator"):
-            params = _deep_merge(params, evaluation["evaluator"])
+        evaluator_parameters = (evaluation.get("evaluator") or {}).get("parameters") or {}
+        if evaluator_parameters:
+            params = _deep_merge(params, evaluator_parameters)
         if params:
             out["parameters"] = params
         return out

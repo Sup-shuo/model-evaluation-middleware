@@ -1,20 +1,25 @@
-schema_version: "1.2"
+schema_version: "1.3"
 
 models: [llama-gguf-example]
 benchmarks: [bbh]
 
+backend:
+  profile: llama_cpp
+
 evaluator:
-  batch_size: 1
-  num_concurrent: 1
-  limit: 1
-  log_samples: true
-  random_seed: 0
-  numpy_random_seed: 1234
-  torch_random_seed: 1234
-  fewshot_random_seed: 1234
-  request_seed: 1234
-  pythonhashseed: 1234
-  evaluation_timeout_seconds: 1800
+  profile: lm_eval
+  parameters:
+    batch_size: 1
+    num_concurrent: 1
+    limit: 1
+    log_samples: true
+    random_seed: 0
+    numpy_random_seed: 1234
+    torch_random_seed: 1234
+    fewshot_random_seed: 1234
+    request_seed: 1234
+    pythonhashseed: 1234
+    evaluation_timeout_seconds: 1800
 
 offline: true
 
