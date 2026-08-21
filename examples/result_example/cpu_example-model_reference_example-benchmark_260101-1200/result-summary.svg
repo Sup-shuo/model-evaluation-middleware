@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="656" viewBox="0 0 960 656">
+<rect width="100%" height="100%" fill="#111827"/>
+<style>text{font-family:Menlo,Consolas,monospace;font-size:14px;white-space:pre}</style>
+<text x="24" y="32" fill="#e5e7eb">Run:       cpu_example-model_reference_example-benchmark_260101-1200</text>
+<text x="24" y="51" fill="#e5e7eb">Outcome:   success</text>
+<text x="24" y="70" fill="#e5e7eb">Model:     example-model</text>
+<text x="24" y="89" fill="#e5e7eb">Benchmark: example-benchmark</text>
+<text x="24" y="108" fill="#e5e7eb">Framework: reference_eval</text>
+<text x="24" y="127" fill="#e5e7eb">Started:   2026-01-01T12:00:00+08:00</text>
+<text x="24" y="146" fill="#e5e7eb">Finished:  2026-01-01T12:00:05+08:00</text>
+<text x="24" y="165" fill="#e5e7eb"></text>
+<text x="24" y="184" fill="#e5e7eb">Environment</text>
+<text x="24" y="203" fill="#e5e7eb">  Hardware       : cpu / N/A</text>
+<text x="24" y="222" fill="#e5e7eb">  GPU count      : 0</text>
+<text x="24" y="241" fill="#e5e7eb">  Runtime        : cpu generic</text>
+<text x="24" y="260" fill="#e5e7eb">  Driver         : N/A</text>
+<text x="24" y="279" fill="#e5e7eb">  Backend        : reference 1.0.0</text>
+<text x="24" y="298" fill="#e5e7eb">  Executable     : reference-backend</text>
+<text x="24" y="317" fill="#e5e7eb">  Completions API: http://127.0.0.1:8091/v1/completions</text>
+<text x="24" y="336" fill="#e5e7eb">  Evaluator      : reference_eval 1.0.0</text>
+<text x="24" y="355" fill="#e5e7eb">  Transformers   : N/A</text>
+<text x="24" y="374" fill="#e5e7eb">  Project        : &lt;PROJECT_ROOT&gt;</text>
+<text x="24" y="393" fill="#e5e7eb">  Harness        : /opt/reference-evaluator</text>
+<text x="24" y="412" fill="#e5e7eb">  Dataset cache  : /opt/model-evaluation/cache</text>
+<text x="24" y="431" fill="#e5e7eb">  Model path     : /opt/models/example-model</text>
+<text x="24" y="450" fill="#e5e7eb"></text>
+<text x="24" y="469" fill="#e5e7eb">+--------------------+---------+--------+---------------+----------+----------+---------+</text>
+<text x="24" y="488" fill="#e5e7eb">| Task               | Version | n-shot | Metric        | Value    | Stderr   | Samples |</text>
+<text x="24" y="507" fill="#e5e7eb">+--------------------+---------+--------+---------------+----------+----------+---------+</text>
+<text x="24" y="526" fill="#e5e7eb">| example_task_alpha | 1.0     | 0      | acc_norm,none | 0.500000 | 0.353553 | 2       |</text>
+<text x="24" y="545" fill="#e5e7eb">| example_task_beta  | 1.0     | 0      | acc_norm,none | 1.000000 | 0.000000 | 2       |</text>
+<text x="24" y="564" fill="#e5e7eb">+--------------------+---------+--------+---------------+----------+----------+---------+</text>
+<text x="24" y="583" fill="#86efac">Summary: accuracy=0.750000  tasks=2  samples=4</text>
+<text x="24" y="602" fill="#e5e7eb">Source: result.json + metrics.json + terminal.json + config/*.json</text>
+<text x="24" y="621" fill="#e5e7eb">Note: this view is for human verification; native JSON remains the authoritative saved output.</text>
+</svg>

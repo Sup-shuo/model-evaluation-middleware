@@ -10,6 +10,8 @@
   product and deterministic `matrix-export` bundles for external schedulers.
 - Added a hardware-free `eval-manager demo` using the same Matrix, process and
   result-publication path as real evaluations.
+- Added opt-in `--render-summary` output for successful runs and a checked-in,
+  sanitized result-product example for consumer integration tests.
 - Added project-relative cache roots and refreshed the configuration and result
   documentation without changing the System/Model/Evaluation ownership boundary.
 - Added an explicitly invoked, non-destructive checkpoint inspection and Qwen

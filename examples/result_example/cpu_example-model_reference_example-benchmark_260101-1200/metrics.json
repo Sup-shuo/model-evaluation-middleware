@@ -1,0 +1,72 @@
+{
+  "schema_version": "1.0",
+  "run_id": "cpu_example-model_reference_example-benchmark_260101-1200",
+  "model": "example-model",
+  "benchmark": "example-benchmark",
+  "framework": "reference_eval",
+  "summary": {
+    "accuracy": {
+      "value": 0.75,
+      "higher_is_better": true
+    }
+  },
+  "groups": {
+    "example_group": {
+      "metrics": {
+        "acc_norm,none": {
+          "value": 0.75,
+          "stderr": 0.216506,
+          "higher_is_better": true
+        }
+      },
+      "canonical_metrics": {
+        "accuracy": {
+          "value": 0.75,
+          "higher_is_better": true
+        }
+      },
+      "sample_count": {
+        "original": 4,
+        "effective": 4
+      },
+      "num_fewshot": 0,
+      "version": "1.0",
+      "subtasks": [
+        "example_task_alpha",
+        "example_task_beta"
+      ]
+    }
+  },
+  "tasks": {
+    "example_task_alpha": {
+      "metrics": {
+        "acc_norm,none": {
+          "value": 0.5,
+          "stderr": 0.353553,
+          "higher_is_better": true
+        }
+      },
+      "sample_count": {
+        "original": 2,
+        "effective": 2
+      },
+      "num_fewshot": 0,
+      "version": "1.0"
+    },
+    "example_task_beta": {
+      "metrics": {
+        "acc_norm,none": {
+          "value": 1.0,
+          "stderr": 0.0,
+          "higher_is_better": true
+        }
+      },
+      "sample_count": {
+        "original": 2,
+        "effective": 2
+      },
+      "num_fewshot": 0,
+      "version": "1.0"
+    }
+  }
+}

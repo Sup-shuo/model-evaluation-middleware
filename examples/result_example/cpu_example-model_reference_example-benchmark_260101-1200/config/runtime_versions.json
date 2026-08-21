@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "device": {
+    "vendor": "cpu",
+    "devices": []
+  },
+  "runtime": {
+    "family": "cpu",
+    "version": "generic",
+    "driver_version": "N/A"
+  },
+  "backend": {
+    "adapter": "reference",
+    "adapter_version": "1.0.0",
+    "management": "managed",
+    "probes": [
+      {
+        "id": "backend.import",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "evaluator": {
+    "adapter": "reference_eval",
+    "adapter_version": "1.0.0",
+    "facts": {
+      "framework": "reference_eval",
+      "framework_version": "1.0.0",
+      "framework_file": "/opt/reference-evaluator",
+      "cache_root": "/opt/model-evaluation/cache",
+      "packages": {
+        "transformers": "N/A"
+      }
+    }
+  },
+  "environments": {
+    "controller": {
+      "python": "/usr/bin/python3",
+      "version": "3.11"
+    }
+  }
+}

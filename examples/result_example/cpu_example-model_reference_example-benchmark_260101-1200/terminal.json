@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "run_id": "cpu_example-model_reference_example-benchmark_260101-1200",
+  "outcome": "success",
+  "started_at": "2026-01-01T12:00:00+08:00",
+  "finished_at": "2026-01-01T12:00:05+08:00",
+  "timezone": "Asia/Shanghai",
+  "cleanup": {
+    "status": "clean",
+    "backend": {
+      "status": "clean",
+      "managed": true,
+      "owned_process_group_remaining": false
+    }
+  },
+  "warnings": []
+}

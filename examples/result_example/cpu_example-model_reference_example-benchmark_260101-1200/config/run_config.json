@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "run_id": "cpu_example-model_reference_example-benchmark_260101-1200",
+  "system": {
+    "id": "example-cpu"
+  },
+  "model": {
+    "id": "example-model",
+    "source": {
+      "type": "local",
+      "ref": "example/example-model"
+    }
+  },
+  "evaluation": {
+    "id": "example-benchmark",
+    "seeds": {
+      "random": 1234,
+      "numpy": 1234,
+      "framework": 1234
+    }
+  },
+  "backend": {
+    "adapter": "reference",
+    "parameters": {
+      "executable": "reference-backend",
+      "port": 8091
+    },
+    "model_location": {
+      "local_path": "/opt/models/example-model"
+    }
+  },
+  "evaluator": {
+    "adapter": "reference_eval"
+  }
+}

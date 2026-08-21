@@ -1,0 +1,15 @@
+{
+  "synthetic_example": true,
+  "framework": "reference_eval",
+  "results": {
+    "example_task_alpha": {
+      "acc_norm,none": 0.5
+    },
+    "example_task_beta": {
+      "acc_norm,none": 1.0
+    },
+    "example_group": {
+      "acc_norm,none": 0.75
+    }
+  }
+}

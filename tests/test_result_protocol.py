@@ -93,6 +93,21 @@ class ResultProtocolTests(unittest.TestCase):
             self.assertEqual(report["effective_samples"], 10)
             self.assertEqual(report["artifacts"], 2)
 
+    def test_checked_in_sanitized_result_example_is_a_valid_product(self):
+        run = (
+            ROOT
+            / "examples"
+            / "result_example"
+            / "cpu_example-model_reference_example-benchmark_260101-1200"
+        )
+        report = inspect_run_product(run, self.schemas)
+        self.assertEqual(report["outcome"], "success")
+        self.assertEqual(report["model"], "example-model")
+        self.assertEqual(report["summary"]["accuracy"]["value"], 0.75)
+        self.assertEqual(report["tasks"], 2)
+        self.assertEqual(report["effective_samples"], 4)
+        self.assertEqual(report["artifacts"], 3)
+
     def test_python_result_sdk_exposes_stable_read_only_views(self):
         with tempfile.TemporaryDirectory() as td:
             run = self._success(Path(td))

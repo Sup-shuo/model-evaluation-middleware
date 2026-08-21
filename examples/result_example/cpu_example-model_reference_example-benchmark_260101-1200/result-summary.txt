@@ -1,0 +1,32 @@
+Run:       cpu_example-model_reference_example-benchmark_260101-1200
+Outcome:   success
+Model:     example-model
+Benchmark: example-benchmark
+Framework: reference_eval
+Started:   2026-01-01T12:00:00+08:00
+Finished:  2026-01-01T12:00:05+08:00
+
+Environment
+  Hardware       : cpu / N/A
+  GPU count      : 0
+  Runtime        : cpu generic
+  Driver         : N/A
+  Backend        : reference 1.0.0
+  Executable     : reference-backend
+  Completions API: http://127.0.0.1:8091/v1/completions
+  Evaluator      : reference_eval 1.0.0
+  Transformers   : N/A
+  Project        : <PROJECT_ROOT>
+  Harness        : /opt/reference-evaluator
+  Dataset cache  : /opt/model-evaluation/cache
+  Model path     : /opt/models/example-model
+
++--------------------+---------+--------+---------------+----------+----------+---------+
+| Task               | Version | n-shot | Metric        | Value    | Stderr   | Samples |
++--------------------+---------+--------+---------------+----------+----------+---------+
+| example_task_alpha | 1.0     | 0      | acc_norm,none | 0.500000 | 0.353553 | 2       |
+| example_task_beta  | 1.0     | 0      | acc_norm,none | 1.000000 | 0.000000 | 2       |
++--------------------+---------+--------+---------------+----------+----------+---------+
+Summary: accuracy=0.750000  tasks=2  samples=4
+Source: result.json + metrics.json + terminal.json + config/*.json
+Note: this view is for human verification; native JSON remains the authoritative saved output.

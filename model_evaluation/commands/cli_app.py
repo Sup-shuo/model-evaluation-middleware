@@ -17,7 +17,7 @@ from model_evaluation.commands.workflow import run_check
 from model_evaluation.core.app import Application
 from model_evaluation.core.config.deployment import resolve_deployment_profile
 from model_evaluation.core.config.evaluation import resolve_evaluation_profile
-from model_evaluation.core.errors import ModelEvalError
+from model_evaluation.core.errors import ModelEvalError, ResultProductError
 from model_evaluation.core.files import atomic_json
 from model_evaluation.core.result_product import inspect_run_product
 from model_evaluation.core.security import redact_diagnostic
@@ -27,6 +27,7 @@ from model_evaluation.environment_snapshot import (
     requirements_lock_text,
 )
 from model_evaluation.onboarding import HARDWARE_TEMPLATES, initialize_project
+from model_evaluation.result_report import write_run_report
 
 
 def dump(obj) -> None:
@@ -79,6 +80,17 @@ def _add_resume_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--resume-dir")
 
 
+def _add_render_summary_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--render-summary",
+        action="store_true",
+        help=(
+            "为每个成功 run 生成 result-summary.txt 和 "
+            "result-summary.svg；正式 JSON 结果保持不变"
+        ),
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="eval-manager",
@@ -113,6 +125,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     demo.add_argument("--results-root")
     demo.add_argument("--cache-root")
+    _add_render_summary_arg(demo)
 
     adapter_check = commands.add_parser(
         "adapter-check",
@@ -176,10 +189,12 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("run", nargs="?")
     _add_execution_overrides(run)
     add_user_config_args(run)
+    _add_render_summary_arg(run)
 
     run_plan = commands.add_parser("run-plan")
     run_plan.add_argument("plan")
     _add_resume_args(run_plan)
+    _add_render_summary_arg(run_plan)
 
     matrix_validate = commands.add_parser("matrix-validate")
     matrix_validate.add_argument("matrix")
@@ -208,10 +223,12 @@ def build_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=None,
     )
+    _add_render_summary_arg(matrix_run)
 
     saved_matrix = commands.add_parser("run-matrix-plan")
     saved_matrix.add_argument("plan")
     _add_resume_args(saved_matrix)
+    _add_render_summary_arg(saved_matrix)
     return parser
 
 
@@ -314,8 +331,45 @@ def _matrix_executor(app: Application, args: argparse.Namespace, plan: dict):
     )
 
 
-def _emit_batch(path: Path, summary: dict) -> None:
-    dump({"batch_dir": str(path), "summary": summary})
+def _render_run_summary(path: str | Path) -> dict[str, str]:
+    try:
+        return write_run_report(path)
+    except (OSError, ValueError) as exc:
+        raise ResultProductError(
+            f"cannot render result summary for {path}: {exc}"
+        ) from exc
+
+
+def _render_batch_summaries(batch_dir: Path) -> list[dict[str, str]]:
+    runs_path = batch_dir / "runs.json"
+    try:
+        rows = json_loads_strict(runs_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ResultProductError(
+            f"cannot read batch runs: {runs_path}: {exc}"
+        ) from exc
+    if not isinstance(rows, list):
+        raise ResultProductError(f"batch runs must be a JSON array: {runs_path}")
+    reports = []
+    for row in rows:
+        if not isinstance(row, dict) or row.get("status") != "success":
+            continue
+        run_dir = row.get("run_dir")
+        if not isinstance(run_dir, str) or not run_dir:
+            raise ResultProductError("successful batch row is missing run_dir")
+        reports.append(_render_run_summary(run_dir))
+    return reports
+
+
+def _emit_batch(
+    path: Path,
+    summary: dict,
+    rendered_reports: list[dict[str, str]] | None = None,
+) -> None:
+    payload = {"batch_dir": str(path), "summary": summary}
+    if rendered_reports is not None:
+        payload["rendered_reports"] = rendered_reports
+    dump(payload)
     if summary["failed"] or summary["not_run"]:
         raise SystemExit(3)
 
@@ -340,12 +394,14 @@ def _handle_plan_or_run(args: argparse.Namespace, app: Application) -> bool:
             _emit_batch(batch_dir, summary)
         run_dir = Path(str(successful[0]["run_dir"]))
         report = inspect_run_product(run_dir, app.schemas)
+        rendered = _render_run_summary(run_dir) if args.render_summary else None
         dump(
             {
                 "ok": True,
                 "demo": "reference",
                 "batch_dir": str(batch_dir),
                 "report": report,
+                **({"rendered_report": rendered} if rendered else {}),
             }
         )
         return True
@@ -370,7 +426,16 @@ def _handle_plan_or_run(args: argparse.Namespace, app: Application) -> bool:
                 results_root=args.results_root,
                 cache_root=args.cache_root,
             )
-            print(orchestrator.execute(plan))
+            run_dir = orchestrator.execute(plan)
+            if args.render_summary:
+                dump(
+                    {
+                        "run_dir": str(run_dir),
+                        "rendered_report": _render_run_summary(run_dir),
+                    }
+                )
+            else:
+                print(run_dir)
             return True
         plan, bundle = app.user_matrix_plan(
             args.system_config,
@@ -381,7 +446,8 @@ def _handle_plan_or_run(args: argparse.Namespace, app: Application) -> bool:
             cache_root=args.cache_root or bundle.cache_root,
         )
         path, summary = executor.execute(plan)
-        _emit_batch(path, summary)
+        reports = _render_batch_summaries(path) if args.render_summary else None
+        _emit_batch(path, summary, reports)
         return True
 
     if args.cmd == "run-plan":
@@ -394,14 +460,24 @@ def _handle_plan_or_run(args: argparse.Namespace, app: Application) -> bool:
                 continue_on_error=args.continue_on_error,
                 resume_dir=args.resume_dir,
             )
-            _emit_batch(path, summary)
+            reports = _render_batch_summaries(path) if args.render_summary else None
+            _emit_batch(path, summary, reports)
             return True
         plan = app.load_plan(args.plan)
         orchestrator = app.orchestrator(
             results_root=args.results_root,
             cache_root=args.cache_root,
         )
-        print(orchestrator.execute(plan))
+        run_dir = orchestrator.execute(plan)
+        if args.render_summary:
+            dump(
+                {
+                    "run_dir": str(run_dir),
+                    "rendered_report": _render_run_summary(run_dir),
+                }
+            )
+        else:
+            print(run_dir)
         return True
     return False
 
@@ -437,7 +513,8 @@ def _handle_matrix(args: argparse.Namespace, app: Application) -> bool:
             plan,
             continue_on_error=args.continue_on_error,
         )
-        _emit_batch(path, summary)
+        reports = _render_batch_summaries(path) if args.render_summary else None
+        _emit_batch(path, summary, reports)
         return True
     if args.cmd == "run-matrix-plan":
         plan = app.load_matrix_plan(args.plan)
@@ -447,7 +524,8 @@ def _handle_matrix(args: argparse.Namespace, app: Application) -> bool:
             continue_on_error=args.continue_on_error,
             resume_dir=args.resume_dir,
         )
-        _emit_batch(path, summary)
+        reports = _render_batch_summaries(path) if args.render_summary else None
+        _emit_batch(path, summary, reports)
         return True
     return False
 
