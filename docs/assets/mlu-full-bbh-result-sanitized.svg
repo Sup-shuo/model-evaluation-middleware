@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1074" viewBox="0 0 960 1074">
+<rect width="100%" height="100%" fill="#111827"/>
+<style>text{font-family:Menlo,Consolas,monospace;font-size:14px;white-space:pre}</style>
+<text x="24" y="32" fill="#e5e7eb">Run:       mlu_coder3101-qwen35-4b-heretic_vllm_bbh_260813-2246</text>
+<text x="24" y="51" fill="#e5e7eb">Outcome:   success</text>
+<text x="24" y="70" fill="#e5e7eb">Model:     coder3101-qwen35-4b-heretic</text>
+<text x="24" y="89" fill="#e5e7eb">Benchmark: bbh</text>
+<text x="24" y="108" fill="#e5e7eb">Framework: lm_eval</text>
+<text x="24" y="127" fill="#e5e7eb">Started:   2026-08-13T22:46:25+08:00</text>
+<text x="24" y="146" fill="#e5e7eb">Finished:  2026-08-13T23:36:46+08:00</text>
+<text x="24" y="165" fill="#e5e7eb"></text>
+<text x="24" y="184" fill="#e5e7eb">Environment</text>
+<text x="24" y="203" fill="#e5e7eb">  Hardware       : cambricon / Cambricon MLU</text>
+<text x="24" y="222" fill="#e5e7eb">  GPU count      : 1</text>
+<text x="24" y="241" fill="#e5e7eb">  Runtime        : neuware 4.7.2</text>
+<text x="24" y="260" fill="#e5e7eb">  Driver         : N/A</text>
+<text x="24" y="279" fill="#e5e7eb">  Backend        : vllm 0.21.0+empty</text>
+<text x="24" y="298" fill="#e5e7eb">  Executable     : vllm</text>
+<text x="24" y="317" fill="#e5e7eb">  Completions API: http://127.0.0.1:8091/v1/completions</text>
+<text x="24" y="336" fill="#e5e7eb">  Evaluator      : lm_eval 0.4.13.dev0</text>
+<text x="24" y="355" fill="#e5e7eb">  Transformers   : 5.14.1</text>
+<text x="24" y="374" fill="#e5e7eb">  Project        : /mnt/afs/&lt;USER&gt;/projects/model_evaluation_template</text>
+<text x="24" y="393" fill="#e5e7eb">  Harness        : /mnt/afs/&lt;USER&gt;/projects/lm-evaluation-harness/lm_eval/__init__.py</text>
+<text x="24" y="412" fill="#e5e7eb">  Dataset cache  : /mnt/afs/&lt;USER&gt;/projects/lm_eval_cache</text>
+<text x="24" y="431" fill="#e5e7eb">  Model path     : /data/coder3101/Qwen3.5-4B-heretic</text>
+<text x="24" y="450" fill="#e5e7eb"></text>
+<text x="24" y="469" fill="#e5e7eb">+-----------------------------------------+---------+--------+---------------+----------+----------+---------+</text>
+<text x="24" y="488" fill="#e5e7eb">| Task                                    | Version | n-shot | Metric        | Value    | Stderr   | Samples |</text>
+<text x="24" y="507" fill="#e5e7eb">+-----------------------------------------+---------+--------+---------------+----------+----------+---------+</text>
+<text x="24" y="526" fill="#e5e7eb">| boolean_expressions                     | 1.0     | 3      | acc_norm,none | 0.860000 | 0.021989 | 250     |</text>
+<text x="24" y="545" fill="#e5e7eb">| causal_judgement                        | 1.0     | 3      | acc_norm,none | 0.577540 | 0.036218 | 187     |</text>
+<text x="24" y="564" fill="#e5e7eb">| date_understanding                      | 1.0     | 3      | acc_norm,none | 0.672000 | 0.029752 | 250     |</text>
+<text x="24" y="583" fill="#e5e7eb">| disambiguation_qa                       | 1.0     | 3      | acc_norm,none | 0.516000 | 0.031670 | 250     |</text>
+<text x="24" y="602" fill="#e5e7eb">| formal_fallacies                        | 1.0     | 3      | acc_norm,none | 0.556000 | 0.031487 | 250     |</text>
+<text x="24" y="621" fill="#e5e7eb">| geometric_shapes                        | 1.0     | 3      | acc_norm,none | 0.368000 | 0.030562 | 250     |</text>
+<text x="24" y="640" fill="#e5e7eb">| hyperbaton                              | 1.0     | 3      | acc_norm,none | 0.524000 | 0.031650 | 250     |</text>
+<text x="24" y="659" fill="#e5e7eb">| logical_deduction_five_objects          | 1.0     | 3      | acc_norm,none | 0.540000 | 0.031585 | 250     |</text>
+<text x="24" y="678" fill="#e5e7eb">| logical_deduction_seven_objects         | 1.0     | 3      | acc_norm,none | 0.476000 | 0.031650 | 250     |</text>
+<text x="24" y="697" fill="#e5e7eb">| logical_deduction_three_objects         | 1.0     | 3      | acc_norm,none | 0.760000 | 0.027065 | 250     |</text>
+<text x="24" y="716" fill="#e5e7eb">| movie_recommendation                    | 1.0     | 3      | acc_norm,none | 0.740000 | 0.027797 | 250     |</text>
+<text x="24" y="735" fill="#e5e7eb">| navigate                                | 1.0     | 3      | acc_norm,none | 0.692000 | 0.029257 | 250     |</text>
+<text x="24" y="754" fill="#e5e7eb">| object_counting                         | 1.0     | 3      | acc_norm,none | 0.388000 | 0.030881 | 250     |</text>
+<text x="24" y="773" fill="#e5e7eb">| penguins_in_a_table                     | 1.0     | 3      | acc_norm,none | 0.602740 | 0.040637 | 146     |</text>
+<text x="24" y="792" fill="#e5e7eb">| reasoning_about_colored_objects         | 1.0     | 3      | acc_norm,none | 0.704000 | 0.028929 | 250     |</text>
+<text x="24" y="811" fill="#e5e7eb">| ruin_names                              | 1.0     | 3      | acc_norm,none | 0.720000 | 0.028454 | 250     |</text>
+<text x="24" y="830" fill="#e5e7eb">| salient_translation_error_detection     | 1.0     | 3      | acc_norm,none | 0.572000 | 0.031356 | 250     |</text>
+<text x="24" y="849" fill="#e5e7eb">| snarks                                  | 1.0     | 3      | acc_norm,none | 0.561798 | 0.037294 | 178     |</text>
+<text x="24" y="868" fill="#e5e7eb">| sports_understanding                    | 1.0     | 3      | acc_norm,none | 0.468000 | 0.031621 | 250     |</text>
+<text x="24" y="887" fill="#e5e7eb">| temporal_sequences                      | 1.0     | 3      | acc_norm,none | 0.896000 | 0.019345 | 250     |</text>
+<text x="24" y="906" fill="#e5e7eb">| tracking_shuffled_objects_five_objects  | 1.0     | 3      | acc_norm,none | 0.204000 | 0.025537 | 250     |</text>
+<text x="24" y="925" fill="#e5e7eb">| tracking_shuffled_objects_seven_objects | 1.0     | 3      | acc_norm,none | 0.128000 | 0.021172 | 250     |</text>
+<text x="24" y="944" fill="#e5e7eb">| tracking_shuffled_objects_three_objects | 1.0     | 3      | acc_norm,none | 0.336000 | 0.029933 | 250     |</text>
+<text x="24" y="963" fill="#e5e7eb">| web_of_lies                             | 1.0     | 3      | acc_norm,none | 0.488000 | 0.031677 | 250     |</text>
+<text x="24" y="982" fill="#e5e7eb">+-----------------------------------------+---------+--------+---------------+----------+----------+---------+</text>
+<text x="24" y="1001" fill="#86efac">Summary: accuracy=0.555112  tasks=24  samples=5761</text>
+<text x="24" y="1020" fill="#e5e7eb">Source: result.json + metrics.json + terminal.json + config/*.json</text>
+<text x="24" y="1039" fill="#e5e7eb">Note: this view is for human verification; native JSON remains the authoritative saved output.</text>
+</svg>

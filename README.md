@@ -44,6 +44,20 @@ accelerator. It normally returns within 10 seconds:
 The demo creates a normal result directory. `contract_ok=1` reports that the
 middleware pipeline completed; it is not a model-quality metric.
 
+## Example result output
+
+The SVG below comes from a real successful Cambricon MLU full-BBH run of
+`coder3101/Qwen3.5-4B-heretic`: 24 tasks, 5,761 effective samples, and
+`accuracy=0.555112`. Hardware, framework versions, task metrics, timestamps,
+and model information are unchanged; only the user-specific filesystem segment
+is replaced with `<USER>`.
+
+![Sanitized real MLU full-BBH result](docs/assets/mlu-full-bbh-result-sanitized.svg)
+
+For format discovery and consumer tests, a separate synthetic, schema-valid
+directory remains available at
+[`examples/result_example/`](examples/result_example/).
+
 ## What it delivers
 
 | Capability | What the middleware provides |
@@ -232,9 +246,7 @@ results/<run-id>/
 A schema-valid, synthetic example is committed at
 [`examples/result_example/`](examples/result_example/). It contains the public
 JSON files, raw output, samples, effective configuration, logs, and sanitized
-TXT/SVG projections, but no real benchmark result or private machine data:
-
-![Sanitized result summary example](examples/result_example/cpu_example-model_reference_example-benchmark_260101-1200/result-summary.svg)
+TXT/SVG projections, but no real benchmark result or private machine data.
 
 Validate or inspect the example exactly like a real run:
 

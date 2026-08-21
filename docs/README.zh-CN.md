@@ -40,6 +40,17 @@ Matrix 计划、进程管理、结果发布和一致性检查。它不需要模�
 
 它生成的仍是正式结果目录。`contract_ok=1` 表示中间件链路跑通，不是模型能力指标。
 
+## 结果产物示例
+
+下图来自 `coder3101/Qwen3.5-4B-heretic` 在 Cambricon MLU 上真实成功完成的完整
+BBH 评测：24 个 tasks、5761 条有效样本，`accuracy=0.555112`。硬件、框架版本、
+各任务指标、时间和模型信息均保持原样，仅把用户目录字段替换为 `<USER>`。
+
+![脱敏后的真实 MLU 完整 BBH 结果](assets/mlu-full-bbh-result-sanitized.svg)
+
+另有一份用于理解协议和消费者测试的合成 Schema 示例，位于
+[`examples/result_example/`](../examples/result_example/)。
+
 ## 这个项目提供什么
 
 | 能力 | 中间件提供的内容 |
@@ -216,9 +227,7 @@ results/<run-id>/
 
 仓库提供一份可通过 Schema 与一致性检查的合成脱敏示例：
 [`examples/result_example/`](../examples/result_example/)。其中包含公共 JSON、框架原始
-输出、samples、生效配置、日志和脱敏 TXT/SVG，但不包含真实评测分数或私有机器信息：
-
-![脱敏结果摘要示例](../examples/result_example/cpu_example-model_reference_example-benchmark_260101-1200/result-summary.svg)
+输出、samples、生效配置、日志和脱敏 TXT/SVG，但不包含真实评测分数或私有机器信息。
 
 它与真实 run 使用同一套检查命令：
 
