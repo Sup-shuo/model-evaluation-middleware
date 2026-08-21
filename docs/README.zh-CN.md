@@ -146,6 +146,9 @@ Model 和 Evaluation 可以在不同机器保持字节不变，只替换 System�
 # Mock 演示，直接输出最终 JSON 报告
 ./eval-manager demo
 
+# 同时为成功 run 保存可选 TXT/SVG 投影视图
+./eval-manager demo --render-summary
+
 # 完整的运行前检查；自动化使用 --format json
 ./eval-manager check --system-config mlu --evaluation-config smoke_bbh_08b
 
@@ -154,7 +157,8 @@ Model 和 Evaluation 可以在不同机器保持字节不变，只替换 System�
 
 # 生成计划或执行评测
 ./eval-manager plan --system-config mlu --evaluation-config smoke_bbh_08b -o /tmp/plan.json
-./eval-manager run  --system-config mlu --evaluation-config smoke_bbh_08b
+./eval-manager run --system-config mlu --evaluation-config smoke_bbh_08b \
+  --render-summary
 
 # 验证和查看最终结果
 ./eval-manager result-check results/<run-id>
@@ -205,7 +209,24 @@ results/<run-id>/
 ├── raw/                     # 完整框架原始输出
 ├── samples/                 # 仅显式启用且框架实际产出时存在
 ├── config/                  # 实际配置与可观察运行版本
-└── logs/                    # Backend / Evaluator 日志
+├── logs/                    # Backend / Evaluator 日志
+├── result-summary.txt       # 可选的人类可读投影视图
+└── result-summary.svg       # 可选的终端风格投影视图
+```
+
+仓库提供一份可通过 Schema 与一致性检查的合成脱敏示例：
+[`examples/result_example/`](../examples/result_example/)。其中包含公共 JSON、框架原始
+输出、samples、生效配置、日志和脱敏 TXT/SVG，但不包含真实评测分数或私有机器信息：
+
+![脱敏结果摘要示例](../examples/result_example/cpu_example-model_reference_example-benchmark_260101-1200/result-summary.svg)
+
+它与真实 run 使用同一套检查命令：
+
+```bash
+./eval-manager result-check \
+  examples/result_example/cpu_example-model_reference_example-benchmark_260101-1200
+./eval-manager inspect \
+  examples/result_example/cpu_example-model_reference_example-benchmark_260101-1200
 ```
 
 四个顶层 JSON 各有独立 Schema。`result-check` 和 `inspect` 会检查 Schema、跨文件身份与
@@ -223,7 +244,10 @@ runtime = run.runtime()
 artifacts = run.artifacts()
 ```
 
-协议细节见[结果产品协议](result-product.md)。需要终端截图或报告视图时：
+协议细节见[结果产品协议](result-product.md)。`demo`、`run`、`run-plan`、`matrix-run`
+和 `run-matrix-plan` 可使用 `--render-summary`，为每个成功 run 同时生成 TXT/SVG；失败
+run 保留正常 JSON/日志，不生成投影。不带该开关时，默认 JSON 结果产品完全不变。
+已有成功结果也可以稍后手动生成：
 
 ```bash
 python scripts/print_result.py results/<run-id> \
@@ -265,6 +289,7 @@ model-evaluation-middleware/
 │   ├── examples/mock/       # wheel 内置的无硬件演示
 │   └── commands/            # CLI 命令层
 ├── config/                  # 用户维护的 System、Model、Evaluation
+├── examples/result_example/ # 合成脱敏的最终结果示例
 ├── tests/                   # 单元、集成与静态边界测试
 ├── scripts/                 # 项目发布与结果视图自动化脚本
 ├── tools/                   # 独立的手动检查、转换和校验工具

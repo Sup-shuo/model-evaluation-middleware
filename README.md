@@ -157,6 +157,9 @@ installed `demo` example.
 # Mock demo that returns the final JSON report
 ./eval-manager demo
 
+# Also save the optional TXT/SVG projections for its successful run
+./eval-manager demo --render-summary
+
 # Complete pre-run checks; use --format json for automation
 ./eval-manager check --system-config mlu --evaluation-config smoke_bbh_08b
 
@@ -165,7 +168,8 @@ installed `demo` example.
 
 # Generate a plan or execute an evaluation
 ./eval-manager plan --system-config mlu --evaluation-config smoke_bbh_08b -o /tmp/plan.json
-./eval-manager run  --system-config mlu --evaluation-config smoke_bbh_08b
+./eval-manager run --system-config mlu --evaluation-config smoke_bbh_08b \
+  --render-summary
 
 # Validate and inspect a final result
 ./eval-manager result-check results/<run-id>
@@ -220,7 +224,25 @@ results/<run-id>/
 ├── raw/                     # Complete framework-native output
 ├── samples/                 # Present only when explicitly enabled and produced
 ├── config/                  # Effective configuration and observable versions
-└── logs/                    # Backend and Evaluator logs
+├── logs/                    # Backend and Evaluator logs
+├── result-summary.txt       # Optional human-readable projection
+└── result-summary.svg       # Optional terminal-like projection
+```
+
+A schema-valid, synthetic example is committed at
+[`examples/result_example/`](examples/result_example/). It contains the public
+JSON files, raw output, samples, effective configuration, logs, and sanitized
+TXT/SVG projections, but no real benchmark result or private machine data:
+
+![Sanitized result summary example](examples/result_example/cpu_example-model_reference_example-benchmark_260101-1200/result-summary.svg)
+
+Validate or inspect the example exactly like a real run:
+
+```bash
+./eval-manager result-check \
+  examples/result_example/cpu_example-model_reference_example-benchmark_260101-1200
+./eval-manager inspect \
+  examples/result_example/cpu_example-model_reference_example-benchmark_260101-1200
 ```
 
 Each of the four top-level JSON files has an independent Schema. `result-check`
@@ -240,8 +262,12 @@ runtime = run.runtime()
 artifacts = run.artifacts()
 ```
 
-See the [result product protocol](docs/result-product.md). To create a terminal
-or report view from an existing result:
+See the [result product protocol](docs/result-product.md). Pass
+`--render-summary` to `demo`, `run`, `run-plan`, `matrix-run`, or
+`run-matrix-plan` to write both optional projections for every successful run.
+Failed runs are left with their normal JSON/log products and are not rendered.
+Without the flag, execution keeps the default JSON product unchanged. To create
+the projections later from an existing successful result:
 
 ```bash
 python scripts/print_result.py results/<run-id> \
@@ -286,6 +312,7 @@ model-evaluation-middleware/
 │   ├── examples/mock/       # Hardware-free demo packaged in the wheel
 │   └── commands/            # CLI command layer
 ├── config/                  # User-maintained System, Model, and Evaluation files
+├── examples/result_example/ # Synthetic, sanitized final-result example
 ├── tests/                   # Unit, integration, and static-boundary tests
 ├── scripts/                 # Project release and result-view automation
 ├── tools/                   # Standalone manual inspection/conversion tools
