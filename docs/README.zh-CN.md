@@ -7,7 +7,7 @@
 
 ![模型评测胶水层架构](assets/architecture.zh-CN.svg)
 
-## 10 秒建立感知：不需要 GPU/NPU
+## 快速开始：Mock 演示
 
 安装 Controller 依赖后，在仓库根目录执行：
 
@@ -17,9 +17,9 @@ python -m pip install -r requirements.txt
 ```
 
 `demo` 使用 CPU Runtime、回环 Reference Backend、`dataset/virtual`、
-`binding/reference_eval` 和 `evaluator/reference_eval`，但仍经过正式的配置解析、
-Matrix、进程管理、结果发布和一致性检查。它不下载模型、不访问外网，也不调用实体
-GPU/NPU，通常在 10 秒内返回：
+`binding/reference_eval` 和 `evaluator/reference_eval` 跑通完整控制链路，包括配置解析、
+Matrix 计划、进程管理、结果发布和一致性检查。它不需要模型文件或加速卡，通常在
+10 秒内返回：
 
 ```json
 {
@@ -38,35 +38,32 @@ GPU/NPU，通常在 10 秒内返回：
 }
 ```
 
-它生成的仍是正式结果目录。`contract_ok=1` 只表示胶水链路跑通，**不是模型能力
-分数**，也不代表任何硬件或真实评测框架已经通过。
+它生成的仍是正式结果目录。`contract_ok=1` 表示中间件链路跑通，不是模型能力指标。
 
-## 这个项目负责什么
+## 这个项目提供什么
 
-| 负责 | 不负责 |
+| 能力 | 中间件提供的内容 |
 |---|---|
-| 解析 System、Model、Evaluation | 下载或训练模型 |
-| 发现设备、Runtime 与执行环境 | 重新实现推理引擎 |
-| 启动或连接 Backend，并验证实际能力 | 重新实现 benchmark |
-| 把 Dataset 绑定到 Evaluator | 分布式集群调度 |
-| 保存配置、版本、完整指标和原始输出 | 模型治理、实验追踪平台 |
-| 在失败后清理自己启动的进程 | 取证、防篡改或可信证明 |
+| 可迁移配置 | 将机器相关的 System 与可复用的 Model、Evaluation 意图分离 |
+| 校验与计划 | 解析生效配置、检查兼容性，并在执行前预览资源与步骤 |
+| Adapter 编排 | 连接硬件、Runtime、执行环境、Backend、Dataset、Binding 与 Evaluator |
+| 执行管理 | 启动或接入模型服务、运行评测，并清理项目拥有的进程 |
+| 统一结果 | 发布归一化指标、框架原始输出、样本、配置、版本与日志 |
+| 复现支持 | 记录重建一次运行所需的生效输入和可观察运行环境 |
 
-本项目的“可复现”含义是记录实际生效配置和可观察运行版本，帮助在另一台机器上重建
-同一评测；它不承诺跨硬件 bit-level 一致，也不把结果包装成防篡改证据。
+本项目负责协调已有推理与评测系统，不重新实现模型或 benchmark 逻辑，也不把结果
+包装成防篡改证据。
 
 ## 当前验证范围
 
 | 等级 | 当前范围 | 含义 |
 |---|---|---|
-| 实机完整 E2E | NVIDIA A100/CUDA、Cambricon MLU/Neuware；vLLM + lm-eval + BBH | 24 个任务、5761 条样本、结果发布和清理通过 |
-| 实机 smoke E2E | MetaX C500/MACA；vLLM-MetaX + lm-eval + BBH | 单卡服务与 24 个子任务 smoke 通过，不是完整精度评测 |
+| 实机完整 E2E | NVIDIA A100/CUDA、Cambricon MLU/Neuware、MetaX C500/MACA；vLLM + lm-eval + BBH | 24 个任务、5761 条样本、结果发布和清理通过 |
 | Mock E2E | CPU + Reference Backend/Evaluator + virtual Dataset | 软件执行与结果产品链路通过 |
-| Contract-tested | AMD/ROCm、Ascend/CANN、Ollama、llama.cpp、generic OpenAI 等 | Manifest、Schema、RPC 和计划行为通过，不等于生产实机验收 |
+| Contract-tested | AMD/ROCm、Ascend/CANN、Ollama、llama.cpp、generic OpenAI 等 | Manifest、Schema、RPC 和计划行为已由自动化测试覆盖 |
 
-因此当前状态是“协议覆盖较广、实机覆盖集中”。目录里存在某个 Adapter，不代表该组合
-已经完成生产验证。准确声明见[兼容性矩阵](compatibility.md)和
-[脱敏实机记录](validation/)。
+[兼容性矩阵](compatibility.md)分别列出协议测试与实机验证范围；可复现的环境信息和
+执行命令见[脱敏实机记录](validation/)。
 
 ## 安装与第一次真实评测
 
@@ -146,7 +143,7 @@ Model 和 Evaluation 可以在不同机器保持字节不变，只替换 System�
 ## 常用工作流
 
 ```bash
-# 无硬件演示，直接输出最终 JSON 报告
+# Mock 演示，直接输出最终 JSON 报告
 ./eval-manager demo
 
 # 完整的运行前检查；自动化使用 --format json

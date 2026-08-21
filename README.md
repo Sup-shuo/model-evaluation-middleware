@@ -9,7 +9,7 @@ publishes a consistent result product.
 
 ![Model Evaluation Middleware architecture](docs/assets/architecture.svg)
 
-## Understand the project in 10 seconds, without a GPU or NPU
+## Quickstart: Mock demo
 
 Install the Controller dependencies and run this from the repository root:
 
@@ -18,11 +18,11 @@ python -m pip install -r requirements.txt
 ./eval-manager demo
 ```
 
-`demo` uses the CPU Runtime, a loopback Reference Backend, `dataset/virtual`,
-`binding/reference_eval`, and `evaluator/reference_eval`. It still exercises
-the real configuration parser, Matrix, process management, result publication,
-and consistency validation. It does not download a model, access the network,
-or use a physical GPU/NPU. It normally returns within 10 seconds:
+`demo` runs the complete control path on CPU with a loopback Reference Backend,
+`dataset/virtual`, `binding/reference_eval`, and `evaluator/reference_eval`.
+It exercises configuration parsing, Matrix planning, process management, result
+publication, and consistency validation without requiring model files or an
+accelerator. It normally returns within 10 seconds:
 
 ```json
 {
@@ -41,39 +41,35 @@ or use a physical GPU/NPU. It normally returns within 10 seconds:
 }
 ```
 
-The demo still creates a normal result directory. `contract_ok=1` only means
-that the glue pipeline completed. It is **not a model-quality score** and does
-not claim that any physical hardware or real evaluation framework passed.
+The demo creates a normal result directory. `contract_ok=1` reports that the
+middleware pipeline completed; it is not a model-quality metric.
 
-## Project scope
+## What it delivers
 
-| In scope | Out of scope |
+| Capability | What the middleware provides |
 |---|---|
-| Parse System, Model, and Evaluation configurations | Download or train models |
-| Discover devices, runtimes, and execution environments | Reimplement inference engines |
-| Start or connect to a Backend and validate required capabilities | Reimplement benchmarks |
-| Bind a Dataset to an Evaluator | Distributed cluster scheduling |
-| Save effective configuration, versions, complete metrics, and raw output | Model governance or experiment-tracking platforms |
-| Clean up processes started by this project after failure | Forensics, tamper resistance, or trusted proof |
+| Portable configuration | Separates machine-specific System settings from reusable Model and Evaluation intent |
+| Validation and planning | Resolves effective configuration, checks compatibility, and previews resources before execution |
+| Adapter orchestration | Connects hardware, runtimes, environments, Backends, Datasets, Bindings, and Evaluators |
+| Managed execution | Starts or attaches to model services, runs evaluations, and cleans up owned processes |
+| Consistent results | Publishes normalized metrics, raw framework output, samples, configuration, versions, and logs |
+| Reproduction support | Records the effective inputs and observable runtime context needed to reconstruct a run |
 
-Here, “reproducible” means recording the effective configuration and observable
-runtime versions so that an evaluation can be reconstructed on another machine.
-It does not promise bit-level equality across hardware and does not present
-results as tamper-proof evidence.
+The middleware coordinates existing inference and evaluation systems. It does
+not replace their model or benchmark logic, and it does not present results as
+tamper-proof evidence.
 
 ## Current validation coverage
 
 | Level | Current coverage | Meaning |
 |---|---|---|
-| Full real-machine E2E | NVIDIA A100/CUDA and Cambricon MLU/Neuware; vLLM + lm-eval + BBH | 24 tasks, 5,761 samples, result publication, and cleanup passed |
-| Real-machine smoke E2E | MetaX C500/MACA; vLLM-MetaX + lm-eval + BBH | Single-device service and 24-subtask smoke passed; this is not a full accuracy evaluation |
+| Full real-machine E2E | NVIDIA A100/CUDA, Cambricon MLU/Neuware, and MetaX C500/MACA; vLLM + lm-eval + BBH | 24 tasks, 5,761 samples, result publication, and cleanup passed |
 | Mock E2E | CPU + Reference Backend/Evaluator + virtual Dataset | Software execution and result-product pipeline passed |
-| Contract-tested | AMD/ROCm, Ascend/CANN, Ollama, llama.cpp, generic OpenAI, and others | Manifest, Schema, RPC, and planning behavior passed; this is not production hardware validation |
+| Contract-tested | AMD/ROCm, Ascend/CANN, Ollama, llama.cpp, generic OpenAI, and others | Manifest, Schema, RPC, and planning behavior are covered by automated tests |
 
-The protocol surface is intentionally broader than the current real-machine
-coverage. The presence of an Adapter directory does not mean that combination
-has completed production validation. See the [compatibility matrix](docs/compatibility.md)
-and [sanitized machine records](docs/validation/) for precise claims.
+The [compatibility matrix](docs/compatibility.md) separates contract coverage
+from real-machine validation. Reproducible environment details and commands are
+available in the [sanitized machine records](docs/validation/).
 
 ## Installation and the first real evaluation
 
@@ -158,7 +154,7 @@ installed `demo` example.
 ## Common workflows
 
 ```bash
-# Hardware-free demo that returns the final JSON report
+# Mock demo that returns the final JSON report
 ./eval-manager demo
 
 # Complete pre-run checks; use --format json for automation
