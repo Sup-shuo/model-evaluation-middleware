@@ -47,6 +47,7 @@
       "additionalProperties": false,
       "properties": {
         "devices": {
+          "description": "Ordered selection drawn only from the selected System hardware profile device pool.",
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,

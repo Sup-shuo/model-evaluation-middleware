@@ -2,9 +2,11 @@
 
 Capability paths are the small interoperability language shared by Core and
 Adapters. Stable Core terms cover common facts such as `device.vendor`,
-`runtime.family`, `runtime.version`, `service.context_length`, and tokenizer
-availability. Adapter-owned extensions remain valid and do not require a Core
-release.
+`runtime.family`, `runtime.version`, `runtime.compatible_device_vendors`,
+`service.context_length`, tokenizer availability, and the common service probes
+`service.generation`, `service.chat`, `service.completion_logprobs`,
+`service.echo`, `service.tokenize`, and `service.detokenize`. Adapter-owned
+extensions remain valid and do not require a Core release.
 
 The vocabulary is deliberately not a closed allow-list. Core validates the
 shape of a requirement and evaluates its operator; it does not attempt to know

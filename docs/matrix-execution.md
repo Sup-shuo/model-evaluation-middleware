@@ -103,6 +103,11 @@ eval-manager matrix-export /tmp/matrix-plan.json \
   --strategy resource_balanced
 ```
 
+The bundle manifest and shard documents use Schema 1.2; individual scheduler
+job documents use Schema 1.1. The `resource_balanced` strategy name is retained
+for compatibility, but its weight is only the declared accelerator count. Core
+does not estimate model size, memory use, latency, or benchmark duration.
+
 The output contains:
 
 ```text
@@ -110,7 +115,7 @@ matrix-jobs/
 ├── manifest.json
 ├── plans/                  # Exact executable child ExecutionPlans
 ├── jobs/                   # Scheduler-neutral intent and logical resources
-└── shards/                 # Compatible, resource-balanced job groups
+└── shards/                 # Compatible, accelerator-count-balanced groups
 ```
 
 The scheduler reads logical requirements from `jobs/` and `shards/`, selects a

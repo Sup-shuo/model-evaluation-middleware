@@ -58,7 +58,8 @@ class EvalScopeAdapterTests(unittest.TestCase):
         self.assertEqual(task["metrics"]["namespace"], "canonical")
         self.assertEqual(task["metrics"]["mapping"], {"AverageAccuracy": "accuracy"})
         self.assertEqual(
-            task["metadata"]["evalscope_dataset_args"], {"subset_list": ["main"]}
+            task["metadata"]["evalscope_dataset_args"],
+            {"subset_list": ["main"], "few_shot_num": 0},
         )
 
     def test_requirements_use_chat_service_and_python_environment(self) -> None:
@@ -131,6 +132,11 @@ class EvalScopeAdapterTests(unittest.TestCase):
             self.assertEqual(argv[argv.index("--api-url") + 1], "http://127.0.0.1:8091/v1")
             self.assertEqual(argv[argv.index("--datasets") + 1], "fixture_eval")
             self.assertEqual(argv[argv.index("--limit") + 1], "1")
+            dataset_args = json.loads(argv[argv.index("--dataset-args") + 1])
+            self.assertEqual(
+                dataset_args,
+                {"fixture_eval": {"subset_list": ["main"], "few_shot_num": 0}},
+            )
             self.assertIn("--no-timestamp", argv)
             self.assertNotIn("vllm", argv)
             self.assertEqual(plan["raw_result_root"], str((root / "output").resolve()))
@@ -251,7 +257,7 @@ class EvalScopeAdapterTests(unittest.TestCase):
         self.assertEqual(benchmark["bindings"], {"evalscope": "evalscope"})
         self.assertEqual(
             evaluation["parameters"]["metric_maps"]["evalscope_gsm8k_smoke"],
-            {"AverageAccuracy": "accuracy"},
+            {"mean_acc": "accuracy"},
         )
 
 

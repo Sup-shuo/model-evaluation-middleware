@@ -43,8 +43,9 @@ change between machines.
 `hardware.devices` is the ordered pool exposed by this System. Evaluation can
 set `models[].resources.device_count`; each model receives the first N devices
 from that pool. The selected count may feed Adapter-owned derivation such as
-vLLM tensor parallel size. A top-level `resources.devices` can explicitly
-narrow or reorder the pool for one run. The middleware does not silently choose
+vLLM tensor parallel size. A top-level `resources.devices` can select and
+reorder members of the pool for one run, but cannot introduce a physical device
+that the selected System hardware profile did not expose. The middleware does not silently choose
 another device, move work to CPU, or tune memory limits after a failure.
 
 Use `eval-manager check` and `eval-manager explain` to inspect the effective

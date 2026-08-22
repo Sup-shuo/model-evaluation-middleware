@@ -121,7 +121,8 @@ class UserConfigTests(unittest.TestCase):
             "evaluator": {"profile": "lm_eval_local"},
         }
         if devices is not None:
-            evaluation["resources"] = {"devices": devices}
+            system["profiles"]["hardware"]["local"]["devices"] = copy.deepcopy(devices)
+            evaluation["resources"] = {"devices": copy.deepcopy(devices)}
         return system, evaluation
 
     def _write_docs(self, root: Path, system: dict, evaluation: dict) -> tuple[Path, Path]:
@@ -310,7 +311,7 @@ class UserConfigTests(unittest.TestCase):
                 2,
             )
 
-    def test_hardware_profile_devices_are_machine_default_and_evaluation_can_override(self):
+    def test_hardware_profile_devices_are_machine_default_and_evaluation_can_select_subset(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td).resolve()
             system, evaluation = self._managed_vllm_docs(root)
@@ -327,17 +328,26 @@ class UserConfigTests(unittest.TestCase):
                 2,
             )
 
-            evaluation["resources"] = {"devices": [0]}
+            evaluation["resources"] = {"devices": ["gpu-B", 2]}
             system_path, evaluation_path = self._write_docs(root, system, evaluation)
             app = Application(PACKAGE_ROOT, ROOT)
             bundle = app.user_config.load(system_path, evaluation_path)
             platform = app.specs.resolve("platform", bundle.generated["platform_id"])
-            self.assertEqual(platform["device"]["devices"], ["0"])
-            model_id = next(iter(bundle.generated["model_ids"]))
-            self.assertEqual(
-                bundle.matrix_spec["per_model_overrides"][model_id]["deployment"]["parameters"]["tensor_parallel_size"],
-                1,
-            )
+            self.assertEqual(platform["device"]["devices"], ["gpu-B", "2"])
+
+            evaluation["resources"] = {"devices": [0]}
+            system_path, evaluation_path = self._write_docs(root, system, evaluation)
+            with self.assertRaisesRegex(Exception, "未声明设备"):
+                Application(PACKAGE_ROOT, ROOT).user_config.load(system_path, evaluation_path)
+
+    def test_evaluation_devices_require_an_explicit_system_pool(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td).resolve()
+            system, evaluation = self._managed_vllm_docs(root)
+            evaluation["resources"] = {"devices": [0]}
+            system_path, evaluation_path = self._write_docs(root, system, evaluation)
+            with self.assertRaisesRegex(Exception, "显式声明设备池"):
+                Application(PACKAGE_ROOT, ROOT).user_config.load(system_path, evaluation_path)
 
     def test_per_model_device_count_selects_from_system_pool_and_derives_tp(self):
         with tempfile.TemporaryDirectory() as td:
@@ -967,7 +977,7 @@ class UserConfigTests(unittest.TestCase):
                     'profiles':{
                         'defaults':{'hardware':'local'},
                         'environment':profiles,
-                        'hardware':{'local':{'type':'cpu','runtime':{'type':'cpu'}}},
+                        'hardware':{'local':{'type':'cpu','devices':[0],'runtime':{'type':'cpu'}}},
                         'backend':{'vllm_local':{'type':'vllm','mode':'managed','compatibility':{'runtime_families':['cpu']},'environment':backend_env,'executable':'vllm'}},
                         'evaluator':{'lm_eval_local':{'type':'lm_eval','root':str(lm_root),'environment':eval_env,'parameters':{'require_clean_framework':False}}},
                     },
@@ -1315,7 +1325,7 @@ class UserConfigTests(unittest.TestCase):
                         'backend':{'type':'venv','profile':str(backend_env)},
                         'eval':{'type':'venv','profile':str(eval_env)},
                     },
-                    'hardware':{'local':{'type':'cpu','runtime':{'type':'cpu'}}},
+                    'hardware':{'local':{'type':'cpu','devices':[0],'runtime':{'type':'cpu'}}},
                     'backend':{'vllm_local':{'type':'vllm','mode':'managed','compatibility':{'runtime_families':['cpu']},'environment':'backend','executable':'vllm'}},
                     'evaluator':{'lm_eval_local':{'type':'lm_eval','root':str(lm_root),'environment':'eval','parameters':{'require_clean_framework':False}}},
                 },

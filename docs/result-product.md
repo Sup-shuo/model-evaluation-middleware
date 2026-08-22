@@ -15,8 +15,8 @@ defines the following formal documents:
 Their schemas are distributed with the Python package as
 `model_evaluation/schemas/`, including dedicated schemas for the result,
 metrics, terminal, failure, run configuration, and runtime-version products.
-Schema version `1.0` is frozen for the alpha31 line: incompatible changes require
-a new schema version. `terminal.json` is written last and is the public completion
+Result Product Schema `1.0` is frozen for the 4.1 release line: incompatible
+changes require a new schema version. `terminal.json` is written last and is the public completion
 marker; a directory without it is not a completed result product.
 
 Validate a directory with either command:
@@ -70,9 +70,9 @@ group, and task projections:
 results/_batches/<batch-id>/
 ├── summary.json
 ├── runs.json
-├── summary.tsv
-├── groups.tsv
-└── tasks.tsv
+├── metrics.tsv
+├── group_metrics.tsv
+└── task_metrics.tsv
 ```
 
 `eval-manager result-check` accepts either a run directory or a batch directory.

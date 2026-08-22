@@ -310,14 +310,29 @@ class UserConfigResolver:
             )
             _validate_runtime_compatibility(runtime_type, runtime_families, backend_profile_id=backend_profile_id)
 
-            # Device identity is normally machine-owned.  An evaluation may still
-            # override it for a one-off run, but otherwise the selected Hardware
-            # Profile supplies the stable per-machine selection.
+            # Physical device identity is machine-owned. Evaluation may select
+            # and reorder only devices exposed by the selected Hardware profile.
+            system_devices = hardware.get("devices")
             selected_devices = resources.get("devices")
-            if selected_devices is None:
-                selected_devices = hardware.get("devices")
             if selected_devices is not None:
-                devices = [str(x) for x in selected_devices or []]
+                if system_devices is None:
+                    raise ConfigError(
+                        "evaluation.resources.devices 要求 "
+                        f"system.profiles.hardware.{hardware_profile_id}.devices "
+                        "显式声明设备池"
+                    )
+                available = [str(value) for value in system_devices]
+                available_set = set(available)
+                devices = [str(value) for value in selected_devices]
+                unavailable = [value for value in devices if value not in available_set]
+                if unavailable:
+                    raise ConfigError(
+                        "evaluation.resources.devices 必须只选择 "
+                        f"system.profiles.hardware.{hardware_profile_id}.devices 中的设备；"
+                        f"未声明设备={unavailable}，System 设备池={available}"
+                    )
+            elif system_devices is not None:
+                devices = [str(value) for value in system_devices]
         else:
             if (evaluation.get("profiles") or {}).get("hardware") is not None:
                 raise ConfigError("external/attached backend 不使用本地 Hardware profile；请删除 evaluation.profiles.hardware")

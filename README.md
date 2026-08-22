@@ -79,9 +79,9 @@ turn them into tamper-proof evidence.
 | Level | Current exercised path |
 |---|---|
 | Full real-machine E2E | NVIDIA A100/CUDA and Cambricon MLU/Neuware with vLLM + lm-eval + full BBH |
-| Real-machine smoke E2E | MetaX C500/MACA with vLLM-MetaX + lm-eval + BBH smoke |
+| Real-machine smoke E2E | NVIDIA A100/CUDA with an existing vLLM OpenAI-compatible service + EvalScope + GSM8K; MetaX C500/MACA with vLLM-MetaX + lm-eval + BBH |
 | Mock E2E | CPU + Reference Backend/Evaluator + virtual Dataset |
-| Contract-tested | EvalScope, AMD/ROCm, Ascend/CANN, Ollama, llama.cpp, generic OpenAI, and other built-ins |
+| Contract-tested | AMD/ROCm, Ascend/CANN, Ollama, llama.cpp, generic OpenAI, and other built-ins |
 
 Full environment records and commands are available for
 [NVIDIA A100](docs/validation/nvidia-a100.md),
@@ -178,9 +178,10 @@ eval-manager config migrate                    # dry-run
 
 For large matrices, export child plans for Slurm, Kubernetes, Ray, or an
 internal scheduler. Core intentionally remains a single-host serial executor
-with resource locks. Export protocol 1.1 adds logical scheduler jobs without
-physical device IDs, separates incompatible execution stacks, and balances
-each compatibility group by declared accelerator count:
+with resource locks. The Matrix export bundle manifest and shards use Schema
+1.2; each scheduler job uses Schema 1.1. Jobs contain no physical device IDs,
+incompatible execution stacks stay separate, and `resource_balanced` balances
+each compatibility group only by declared accelerator count:
 
 ```bash
 eval-manager matrix-export /tmp/matrix-plan.json \

@@ -12,7 +12,7 @@ with a production-validated stack.
 | AMD GPU | ROCm | Adapter contract only | — | Contract-tested |
 | Ascend NPU | CANN | Adapter contract only | — | Contract-tested |
 | OpenAI-compatible service | — | generic OpenAI Adapter | configured evaluator | Contract-tested |
-| OpenAI-compatible service | — | existing service Backend | EvalScope | Contract-tested; runtime smoke pending |
+| NVIDIA A100 | CUDA | existing vLLM OpenAI-compatible service | EvalScope 1.10.0 | Real one-sample GSM8K smoke E2E |
 | Local service | — | Ollama / llama.cpp | configured evaluator | Contract-tested |
 
 “Real full BBH E2E” means service startup, 24 BBH tasks, 5,761 effective
@@ -24,6 +24,12 @@ works.
 startup, OpenAI-compatible service capability checks, 24 BBH tasks with one
 effective example per task, result publication and owned-process cleanup passed.
 It is an integration result, not a complete benchmark score.
+
+“Real one-sample GSM8K smoke E2E” means an existing external service was checked,
+EvalScope executed the explicit test split and zero-shot protocol, its `mean_acc`
+was normalized to canonical `accuracy`, the final Result Product passed `result-check`,
+and cleanup correctly left the unowned service running. It is an integration
+result, not a representative model score.
 
 “Contract-tested” means manifests, JSON Schema, RPC objects and planning behavior
 are covered. Before production use, run `validate`, `doctor`, a smoke evaluation,

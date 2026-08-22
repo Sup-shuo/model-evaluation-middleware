@@ -12,6 +12,10 @@ CORE_CAPABILITIES: dict[str, dict[str, str]] = {
     "runtime.family": {"value_type": "string", "description": "Runtime family."},
     "runtime.version": {"value_type": "string", "description": "Runtime version."},
     "runtime.available": {"value_type": "boolean", "description": "Runtime availability."},
+    "runtime.compatible_device_vendors": {
+        "value_type": "array[string]",
+        "description": "Device vendors accepted by the Runtime.",
+    },
     "service.type": {"value_type": "string", "description": "Inference service type."},
     "service.ownership": {"value_type": "string", "description": "Service ownership mode."},
     "service.context_length": {"value_type": "integer", "description": "Service context limit."},
@@ -19,6 +23,15 @@ CORE_CAPABILITIES: dict[str, dict[str, str]] = {
     "service.local_tokenizer": {"value_type": "boolean", "description": "Local tokenizer availability."},
     "service.remote_tokenizer": {"value_type": "boolean", "description": "Remote tokenizer availability."},
     "service.tokenizer_available": {"value_type": "boolean", "description": "Any usable tokenizer."},
+    "service.generation": {"value_type": "boolean", "description": "Text generation availability."},
+    "service.chat": {"value_type": "boolean", "description": "Chat generation availability."},
+    "service.completion_logprobs": {
+        "value_type": "boolean",
+        "description": "Completion log-probability availability.",
+    },
+    "service.echo": {"value_type": "boolean", "description": "Completion echo availability."},
+    "service.tokenize": {"value_type": "boolean", "description": "Tokenize endpoint availability."},
+    "service.detokenize": {"value_type": "boolean", "description": "Detokenize endpoint availability."},
 }
 
 

@@ -71,9 +71,9 @@ eval-manager demo --render-summary
 | 级别 | 已实际覆盖路径 |
 |---|---|
 | 完整实机 E2E | NVIDIA A100/CUDA、Cambricon MLU/Neuware；vLLM + lm-eval + 完整 BBH |
-| 实机 smoke E2E | MetaX C500/MACA；vLLM-MetaX + lm-eval + BBH smoke |
+| 实机 smoke E2E | NVIDIA A100/CUDA；已有 vLLM OpenAI-compatible 服务 + EvalScope + GSM8K；MetaX C500/MACA；vLLM-MetaX + lm-eval + BBH |
 | Mock E2E | CPU + Reference Backend/Evaluator + virtual Dataset |
-| Contract-tested | EvalScope、AMD/ROCm、Ascend/CANN、Ollama、llama.cpp、generic OpenAI 等 |
+| Contract-tested | AMD/ROCm、Ascend/CANN、Ollama、llama.cpp、generic OpenAI 等 |
 
 详细环境与命令见 [NVIDIA A100](validation/nvidia-a100.md)、
 [Cambricon MLU](validation/cambricon-mlu.md) 和
@@ -162,8 +162,9 @@ eval-manager config migrate                    # 默认仅预览
 ```
 
 大规模 Matrix 可以导出子计划交给 Slurm、Kubernetes、Ray 或内部调度器。Core 保持
-单机串行执行与资源锁，不扩张成分布式调度系统。导出协议 1.1 额外生成不含物理卡号的
-逻辑 job 描述，先隔离不兼容的执行栈，再按声明的加速卡数量均衡分片：
+单机串行执行与资源锁，不扩张成分布式调度系统。Matrix 导出 bundle 的 manifest 和
+shard 使用 Schema 1.2，scheduler job 使用 Schema 1.1。job 不含物理卡号；不兼容执行栈
+会被隔离，`resource_balanced` 仅按声明的加速卡数量均衡分片：
 
 ```bash
 eval-manager matrix-export /tmp/matrix-plan.json \

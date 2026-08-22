@@ -78,8 +78,9 @@ the pool fails during validation; the middleware does not guess capacity or
 spill inference to CPU. If `device_count` is omitted, that model keeps the
 entire selected pool.
 
-For a one-off run, top-level `resources.devices` can narrow or reorder the
-System pool before per-model counts are applied. Physical device IDs stay out
+For a one-off run, top-level `resources.devices` must contain only devices
+from the selected System pool; it may select a subset and define their order
+before per-model counts are applied. Physical device IDs stay out
 of reusable Model catalog files.
 
 ## Temporary model override
@@ -120,7 +121,8 @@ immutable inputs, so `--smoke` is intentionally rejected by `run-plan` and
 
 The built-in matrix path expands a finite set of Model, Platform, Deployment,
 Benchmark, and Evaluation axes. Local execution remains serial with resource
-locks. For larger work, export a protocol 1.2 bundle for an external scheduler:
+locks. For larger work, export a bundle whose manifest and shards use Schema
+1.2 and whose scheduler jobs use Schema 1.1:
 
 ```bash
 eval-manager matrix-export /tmp/matrix-plan.json \
@@ -133,7 +135,9 @@ Each `jobs/*.json` file contains logical accelerator count/type, Runtime,
 Backend, Evaluator intent, and claim counts without physical device IDs. The
 bundle also retains exact `plans/*.json` files for workers with compatible
 paths and environments. `round_robin` remains available for deterministic
-legacy-style sharding. Jobs with different accelerator, Runtime, Backend,
+legacy-style sharding. Despite its compatibility-preserving CLI name,
+`resource_balanced` is accelerator-count balanced: Core does not estimate model
+memory, latency, or benchmark duration. Jobs with different accelerator, Runtime, Backend,
 management, Evaluator, or resolved environment capabilities are kept in
 separate shards; the
 requested shard count must provide at least one shard for every compatibility

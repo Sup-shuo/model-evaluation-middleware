@@ -22,6 +22,27 @@ identifiers. It documents product coverage, not trusted evidence.
 - Full result, task metrics, raw output and optional sample publication
 - Graceful owned-process cleanup with no remaining listener
 
+## EvalScope existing-service smoke
+
+- GPU: one NVIDIA A100
+- Backend: an already-running vLLM 0.25.1 OpenAI-compatible Chat service
+- Model: `Qwen/Qwen3.5-4B`, BF16
+- Evaluator: EvalScope 1.10.0 in a dedicated Conda environment
+- Benchmark: GSM8K test split, explicit 0-shot, one effective sample via `--smoke`
+- Result: terminal success, clean cleanup with Backend status `not_owned`, canonical
+  `accuracy=0.0`, and successful `result-check`
+- Reports: `result-summary.txt` and `result-summary.svg` generated
+
+The one-sample value is recorded only to verify execution and normalization; it is
+not a representative GSM8K score. The external service remained running after the
+evaluation.
+
+```bash
+eval-manager check --system-config <nvidia-system> --evaluation-config <evalscope-gsm8k> --smoke
+eval-manager run --system-config <nvidia-system> --evaluation-config <evalscope-gsm8k> --smoke --render-summary
+eval-manager result-check results/<run-id>
+```
+
 ## Reproduction shape
 
 ```bash

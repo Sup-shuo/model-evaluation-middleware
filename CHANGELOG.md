@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Added a real NVIDIA A100 existing-service EvalScope 1.10.0 GSM8K smoke,
+  corrected the native `mean_acc` mapping, and made the Binding pass the declared
+  benchmark split and few-shot count explicitly to EvalScope.
+- Enforced `evaluation.resources.devices` as an ordered selection from the
+  System-owned hardware device pool instead of permitting undeclared IDs.
+- Promoted common Runtime/vendor and OpenAI-compatible service probe paths to
+  the Core capability vocabulary.
+- Corrected Batch TSV filenames and clarified the Matrix bundle, shard, scheduler
+  job Schema versions and accelerator-count-only balancing behavior.
+
 ## 4.1.0-rc1
 
 - Upgraded user System and Evaluation documents to schema 1.3: every run now

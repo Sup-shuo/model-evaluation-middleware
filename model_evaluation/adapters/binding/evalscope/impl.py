@@ -50,6 +50,29 @@ def _basis(benchmark: dict, dataset: dict, evaluation: dict) -> dict:
     dataset_args = protocol.get("evalscope_dataset_args") or {}
     if not isinstance(dataset_args, dict):
         raise AdapterError("CONFIG_INVALID", "benchmark.protocol.evalscope_dataset_args must be an object")
+    dataset_args = dict(dataset_args)
+    fewshot = protocol.get("fewshot")
+    if fewshot is not None:
+        if isinstance(fewshot, bool) or not isinstance(fewshot, int) or fewshot < 0:
+            raise AdapterError("CONFIG_INVALID", "benchmark.protocol.fewshot must be a non-negative integer")
+        configured = dataset_args.get("few_shot_num")
+        if configured is not None and configured != fewshot:
+            raise AdapterError(
+                "CONFIG_INVALID",
+                "benchmark.protocol.fewshot conflicts with evalscope_dataset_args.few_shot_num",
+            )
+        dataset_args["few_shot_num"] = fewshot
+    split = protocol.get("split")
+    if split is not None:
+        if not isinstance(split, str) or not split:
+            raise AdapterError("CONFIG_INVALID", "benchmark.protocol.split must be a non-empty string")
+        configured = dataset_args.get("eval_split")
+        if configured is not None and configured != split:
+            raise AdapterError(
+                "CONFIG_INVALID",
+                "benchmark.protocol.split conflicts with evalscope_dataset_args.eval_split",
+            )
+        dataset_args["eval_split"] = split
     return {
         "binding": "evalscope/v1-native",
         "benchmark_id": benchmark["id"],

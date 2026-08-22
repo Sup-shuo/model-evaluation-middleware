@@ -8,7 +8,7 @@ Binding.
 | Evaluator | Upstream | Built-in integration | Repository validation |
 |---|---|---|---|
 | lm-evaluation-harness | [EleutherAI/lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness) | Evaluator + generic and BBH Bindings | Full BBH E2E on NVIDIA and MLU; C500 smoke E2E |
-| EvalScope | [modelscope/evalscope](https://github.com/modelscope/evalscope) | Evaluator + Binding | Contract-tested |
+| EvalScope | [modelscope/evalscope](https://github.com/modelscope/evalscope) | Evaluator + Binding | Existing-service GSM8K smoke E2E on NVIDIA A100 |
 | Reference Evaluator | Included mock implementation | Evaluator + Binding | CPU Mock E2E |
 | … | External Adapter | Evaluator and, when needed, Binding | Deployment-specific |
 

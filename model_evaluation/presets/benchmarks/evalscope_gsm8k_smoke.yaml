@@ -12,5 +12,5 @@ metrics: [accuracy]
 bindings:
   evalscope: evalscope
 metadata:
-  purpose: EvalScope OpenAI-compatible API smoke; evaluator limit must remain explicit.
+  purpose: EvalScope OpenAI-compatible API validation; use the CLI --smoke flag for a bounded run.
   dataset_management: EvalScope resolves and caches the benchmark dataset.

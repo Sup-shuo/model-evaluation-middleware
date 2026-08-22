@@ -26,6 +26,20 @@ class CapabilityVocabularyTests(unittest.TestCase):
         self.assertEqual(report.diagnostics[0]["vocabulary"], "core")
         self.schemas.validate("capability_diagnostic", report.diagnostics[0])
 
+    def test_cross_adapter_runtime_and_service_terms_are_core(self) -> None:
+        paths = (
+            "runtime.compatible_device_vendors",
+            "service.generation",
+            "service.chat",
+            "service.completion_logprobs",
+            "service.echo",
+            "service.tokenize",
+            "service.detokenize",
+        )
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertEqual(vocabulary_scope(path), "core")
+
     def test_extension_capability_is_not_rejected_by_a_closed_enum(self) -> None:
         report = evaluate(
             {"schema_version": "1.0", "requirements": [

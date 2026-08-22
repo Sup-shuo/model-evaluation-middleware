@@ -18,6 +18,6 @@ parameters:
   ignore_errors: false
   metric_maps:
     evalscope_gsm8k_smoke:
-      AverageAccuracy: accuracy
+      mean_acc: accuracy
 binding:
   adapter: evalscope

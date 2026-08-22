@@ -76,7 +76,8 @@ hardware and path configuration.
 ## Rules that affect portability
 
 - `hardware.devices` is the device pool this machine exposes to the middleware.
-  Evaluation may narrow/reorder the pool and assign a `device_count` per model;
+  Evaluation may select and reorder only members of this pool, then assign a
+  `device_count` per model;
   reusable Model files must never contain physical device IDs.
 - Managed Backends declare `compatibility.runtime_families`; Core compares
   capabilities rather than guessing compatibility from profile names.
