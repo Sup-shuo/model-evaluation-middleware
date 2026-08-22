@@ -11,7 +11,6 @@ from model_evaluation.core.compatibility import (
     facts_from_device,
     facts_from_runtime,
     facts_from_environment,
-    facts_from_service,
     merge_fact_sets,
 )
 from model_evaluation.core.config.platform import adapter_parameters
@@ -26,7 +25,7 @@ from model_evaluation.core.process.env import prepare_process_for_environment
 from model_evaluation.core.process.manager import ProcessManager
 from model_evaluation.core.process.signals import orchestration_signal_guard
 from model_evaluation.core.resources import ResourceManager
-from model_evaluation.core.results import allocate_run_dir, build_run_config, iso_now, plan_timezone, publish_result
+from model_evaluation.core.results import allocate_run_dir, build_run_config, iso_now
 from model_evaluation.core.runtime_record import (
     refresh_environment_versions,
     runtime_versions_base,
@@ -48,6 +47,15 @@ from model_evaluation.core.run_finalization import finalize_run
 from model_evaluation.core.serialization import json_loads_strict
 from model_evaluation.core.schema.validator import SchemaStore
 from model_evaluation.core.security import redact_diagnostic
+from model_evaluation.core.execution_plan import validate_execution_plan
+from model_evaluation.core.run_lifecycle import RunContext, validate_state_transition
+from model_evaluation.core.orchestration_pipeline import (
+    evaluate_and_publish,
+    prepare_dataset_and_task,
+    prepare_platform,
+    preflight_evaluator,
+    start_service,
+)
 
 class Orchestrator:
     def __init__(
@@ -110,6 +118,7 @@ class Orchestrator:
         return run_id_base(plan)
 
     def _status(self, run_dir: Path, state: str, **extra) -> None:
+        validate_state_transition(current_state(run_dir), state)
         record={'state':state,'time':iso_now(self._active_plan),**extra}
         atomic_json(run_dir/'.run'/'status.json',record)
 
@@ -128,14 +137,13 @@ class Orchestrator:
             ".run/dataset",
         ):
             (run_dir / subdirectory).mkdir(parents=True, exist_ok=True)
-        atomic_json(
-            run_dir / "config" / "run_config.json",
-            build_run_config(
-                plan,
-                run_id=run_dir.name,
-                started_at=started_at,
-            ),
+        run_config = build_run_config(
+            plan,
+            run_id=run_dir.name,
+            started_at=started_at,
         )
+        self.schemas.validate("run_config", run_config)
+        atomic_json(run_dir / "config" / "run_config.json", run_config)
 
     def _probe_service_until_ready(self, client, attach: dict, auth_value: str | None, timeout_seconds: float, process_handle=None) -> dict:
         deadline = time.monotonic() + timeout_seconds
@@ -434,9 +442,9 @@ class Orchestrator:
             if expected['runtime'].get('version') not in (None,'unknown') and runtime.get('version') != expected['runtime'].get('version'):
                 raise CompatibilityError(f'runtime version changed after planning: expected {expected["runtime"].get("version")}, got {runtime.get("version")}')
             pair=device_runtime_compatibility(current,runtime)
-            reports['device_runtime_pair']={'compatible':pair.compatible,'reasons':pair.reasons,'optional_misses':pair.optional_misses}
+            reports['device_runtime_pair']={'compatible':pair.compatible,'reasons':pair.reasons,'optional_misses':pair.optional_misses,'diagnostics':pair.diagnostics}
             if not pair.compatible:
-                raise CompatibilityError('; '.join(pair.reasons))
+                raise CompatibilityError('; '.join(pair.reasons), details={'diagnostics': pair.diagnostics})
             current_runtime_patch=self._invoke(rt_client,'resolve_environment',{'descriptor':runtime,'profile':platform['runtime'].get('profile'),'parameters':runtime_params},context={'timeout_seconds':3,'execution_revalidation':True},timeout=4)['env_patch']
             if current_runtime_patch != expected.get('runtime_env_patch',{}):
                 raise CompatibilityError('runtime EnvPatch changed after planning')
@@ -457,10 +465,13 @@ class Orchestrator:
             if not req:
                 continue
             report=evaluate(req,facts)
-            reports[name]={'compatible':report.compatible,'reasons':report.reasons,'optional_misses':report.optional_misses}
+            reports[name]={'compatible':report.compatible,'reasons':report.reasons,'optional_misses':report.optional_misses,'diagnostics':report.diagnostics}
             if not report.compatible:
                 atomic_json(run_dir/'.run'/'diagnostics'/'execution_preflight_compatibility.json',{'compatible':False,'reports':reports})
-                raise CompatibilityError(f'{name} requirements changed after planning: ' + '; '.join(report.reasons))
+                raise CompatibilityError(
+                    f'{name} requirements changed after planning: ' + '; '.join(report.reasons),
+                    details={'diagnostics': report.diagnostics},
+                )
 
         atomic_json(run_dir/'.run'/'diagnostics'/'execution_preflight_compatibility.json',{'compatible':True,'reports':reports})
         return fresh
@@ -508,12 +519,15 @@ class Orchestrator:
         )
 
     def execute(self, plan: dict) -> Path:
-        self.schemas.validate('execution_plan',plan)
+        validate_execution_plan(plan,self.schemas)
         if plan['compatibility']['status']=='incompatible':
-            raise CompatibilityError('; '.join(plan['compatibility'].get('reasons') or ['plan is incompatible']))
-        self._active_plan=plan
+            raise CompatibilityError(
+                '; '.join(plan['compatibility'].get('reasons') or ['plan is incompatible']),
+                details={'diagnostics': plan['compatibility'].get('diagnostics') or []},
+            )
         non_global_claims=[c for c in plan['resources'] if c['kind']!='run_lock']
         with orchestration_signal_guard(), self.resources.run_lock():
+            self._active_plan=plan
             stale=self.pm.recover_stale_managed()
             unresolved=[x for x in stale if x.get('status') in {'identity_mismatch','cleanup_failed','invalid','orphaned_group_ambiguous'}]
             if unresolved:
@@ -521,13 +535,14 @@ class Orchestrator:
             with self.resources.acquire(non_global_claims):
                 started_at=iso_now(plan)
                 run_dir = allocate_run_dir(self.results_root, plan)
-                run_id = run_dir.name
-                backend_handle = None
+                context = RunContext(
+                    plan=plan,
+                    run_dir=run_dir,
+                    started_at=started_at,
+                    stale_recovery=copy.deepcopy(stale),
+                )
                 failure: BaseException | None = None
                 failure_stage: str | None = None
-                backend_shutdown: dict | None = None
-                mode: str | None = None
-                evaluator_returncode: int | None = None
                 self._warning_events=[copy.deepcopy(x) for x in (plan.get('warnings') or [])]
                 try:
                     self._persist_initial(run_dir,plan,started_at=started_at)
@@ -538,222 +553,11 @@ class Orchestrator:
                         )
                     self._status(run_dir, 'CREATED')
                     self._status(run_dir, 'PLANNED')
-                    specs = plan['resolved']['specs']
-                    platform = specs['platform']
-                    deployment = specs['deployment']
-                    benchmark = specs['benchmark']
-                    evaluation = specs['evaluation']
-                    model = specs['model']
-                    mode = deployment['management']['mode']
-                    offline=bool((plan['run_spec'].get('overrides') or {}).get('offline',False))
-                    pdesc=self._revalidate_platform(plan,run_dir)
-                    runtime_versions=self._runtime_versions_base(plan,platform,pdesc)
-                    self._refresh_environment_versions(platform,pdesc,runtime_versions)
-                    self._save_runtime_versions(run_dir,runtime_versions)
-                    self._status(run_dir,'PLATFORM_READY')
-                    dataset_client=self.registry.get('dataset',benchmark['dataset']['provider'])
-                    dataset=self._invoke(dataset_client,'prepare',{'benchmark':benchmark,'cache_root':str(self.cache_root)},context={'cache_root':str(self.cache_root),'workspace':str(run_dir/'.run'/'dataset'),'offline':offline,'network_policy':'offline' if offline else 'online'},timeout=float((plan['run_spec'].get('overrides') or {}).get('dataset_timeout_seconds',600)))
-                    verified=self._invoke(dataset_client,'verify',{'artifact':dataset,'benchmark':benchmark},context={'offline':True},timeout=30)
-                    if not verified['valid']:
-                        details=verified.get('details') or {}
-                        raise ModelEvalError(f'dataset verification failed: {details}')
-                    dataset=verified.get('artifact') or dataset
-                    self._verify_dataset_identity(plan['resolved'].get('dataset_resolution') or {},benchmark,dataset)
-                    self._status(run_dir,'DATA_READY')
-                    binding=self.registry.get('binding',plan['resolved']['binding_adapter'])
-                    task_input={'benchmark':benchmark,'dataset_artifact':dataset,'staging_root':str(run_dir/'.run'/'task'),'evaluation':evaluation}
-                    task=self._invoke(binding,'build_task',task_input,context={'workspace':str(run_dir/'.run'/'task'),'offline':offline},timeout=60)
-                    fp=self._invoke(binding,'protocol_fingerprint',{'benchmark':benchmark,'dataset_artifact':dataset,'evaluation':evaluation},context={'workspace':str(run_dir/'.run'/'task'),'offline':offline},timeout=30)
-                    if fp['protocol_fingerprint'] != task['protocol_fingerprint']:
-                        raise CompatibilityError(f"binding protocol_fingerprint disagrees with FrameworkTaskArtifact: {fp['protocol_fingerprint']} != {task['protocol_fingerprint']}")
-                    self._verify_task_artifacts(task,run_dir/'.run'/'task')
-                    self._status(run_dir, 'TASK_READY')
-                    self._status(run_dir, 'EVALUATOR_PREFLIGHT')
-                    evaluator=self.registry.get('evaluator',evaluation['framework']['adapter'])
-                    runtime_versions['evaluator']={
-                        'adapter':evaluation['framework']['adapter'],
-                        'adapter_version':evaluator.identity.version,
-                    }
-                    self._save_runtime_versions(run_dir,runtime_versions)
-                    # Framework source probes may each spend up to 10 seconds on
-                    # shared/NFS worktrees.  The Adapter RPC budget must be larger
-                    # than the Adapter's own bounded probes, otherwise Core would
-                    # terminate an otherwise healthy check first.
-                    req=self._invoke(evaluator,'requirements',{'evaluation':evaluation,'task':task},context={'workspace':str(run_dir),'offline':offline,'preflight':True},timeout=30)
-                    local_req={'schema_version':'1.0','requirements':[r for r in req.get('requirements',[]) if str(r.get('path','')).startswith('evaluation_environment.')]}
-                    self.schemas.validate('requirement_set',local_req)
-                    local_report=evaluate(local_req,facts_from_environment(pdesc['evaluation_environment'],'evaluation_environment'))
-                    if not local_report.compatible:
-                        raise CompatibilityError(
-                            'evaluator preflight failed: ' + '; '.join(local_report.reasons)
-                        )
-                    # Evaluators may provide a cheap process-level preflight that is
-                    # executed inside the selected evaluation environment. This is
-                    # deliberately before Backend startup so missing Python packages
-                    # or framework dependencies fail without loading the model.
-                    if 'plan_preflight' in (evaluator.identity.manifest.get('operations') or []):
-                        preflight=self._invoke(evaluator,'plan_preflight',{'evaluation':evaluation,'task':task,'cache_root':str(self.cache_root)},context={'workspace':str(run_dir),'cache_root':str(self.cache_root),'offline':offline,'preflight':True},timeout=30)
-                        pre_proc = copy.deepcopy(preflight['process'])
-                        pre_proc.setdefault('metadata', {}).update(
-                            {'role': 'evaluator_preflight', 'run_id': run_id}
-                        )
-                        pre_wrapped,_=self.prepare_process_for_environment(
-                            pre_proc,platform_spec=platform,resolved_platform=pdesc,role='evaluator',
-                            context={'workspace':str(run_dir),'offline':offline,'preflight':True},timeout=5,
-                        )
-                        pre_cp=self.pm.run(pre_wrapped)
-                        def _preflight_text(value):
-                            if value is None:
-                                return ''
-                            return value.decode('utf-8','replace') if isinstance(value,(bytes,bytearray)) else str(value)
-                        preflight_record={
-                                'returncode':pre_cp.returncode,
-                                'stdout':_preflight_text(pre_cp.stdout)[:8000],
-                                'stderr':_preflight_text(pre_cp.stderr)[:8000],
-                            }
-                        if preflight.get('result_format')=='preflight_result':
-                            try:
-                                probe_result=self._preflight_json_result(_preflight_text(pre_cp.stdout))
-                                self.schemas.validate('preflight_probe_result',probe_result)
-                                preflight_record['result']=probe_result
-                                runtime_versions['evaluator']['facts']=copy.deepcopy(probe_result.get('facts') or {})
-                                self._save_runtime_versions(run_dir,runtime_versions)
-                                process_passed = pre_cp.returncode == 0
-                                result_passed = probe_result['status'] == 'passed'
-                                if process_passed != result_passed:
-                                    raise ProcessError(
-                                        'evaluator preflight process/result status mismatch: '
-                                        f"returncode={pre_cp.returncode}, result.status={probe_result['status']!r}"
-                                    )
-                                if not result_passed:
-                                    error=probe_result['error']
-                                    raise ProcessError(f"evaluator preflight failed: {error['code']}: {error['message']}")
-                            finally:
-                                atomic_json(run_dir/'.run'/'diagnostics'/'evaluator_preflight.json',self._redact_diagnostic(preflight_record))
-                        else:
-                            atomic_json(run_dir/'.run'/'diagnostics'/'evaluator_preflight.json',self._redact_diagnostic(preflight_record))
-                            if pre_cp.returncode != 0:
-                                raise ProcessError(f'evaluator dependency preflight failed with rc={pre_cp.returncode}')
-                    backend=self.registry.get('backend',deployment['backend']['adapter'])
-                    start_input={'model':model,'deployment':deployment,'platform':pdesc,'endpoint':plan['resolved'].get('endpoint',{}),'log_path':str(run_dir/'logs'/'backend.log'),'network_policy':'offline' if offline else 'online'}
-                    start_plan=self._invoke(backend,'plan_start',start_input,context={'workspace':str(run_dir), 'offline':offline},timeout=5)
-                    attach = start_plan['attach']
-                    backend_shutdown = copy.deepcopy(start_plan.get('shutdown'))
-                    if mode=='managed':
-                        self._status(run_dir,'SERVICE_STARTING')
-                        proc = copy.deepcopy(start_plan['process'])
-                        proc.setdefault('metadata', {}).update(
-                            {'role': 'backend', 'run_id': run_id}
-                        )
-                        p=pdesc
-                        proc,_=self.prepare_process_for_environment(
-                            proc,platform_spec=platform,resolved_platform=p,role='backend',
-                            base_patches=(("device",p.get('device_env_patch')),("runtime",p.get('runtime_env_patch'))),
-                            context={'workspace':str(run_dir),'offline':offline},timeout=5,
-                        )
-                        if 'plan_preflight' in (backend.identity.manifest.get('operations') or []):
-                            preflight_input={
-                                'model':model,'deployment':deployment,'platform':pdesc,
-                                'network_policy':'offline' if offline else 'online',
-                            }
-                            preflight_plan=self._invoke(
-                                backend,'plan_preflight',preflight_input,
-                                context={'workspace':str(run_dir),'offline':offline,'preflight':True},timeout=5,
-                            )
-                            backend_report=self.run_backend_preflight(
-                                preflight_plan,platform_spec=platform,resolved_platform=p,
-                                raise_on_failure=False,
-                            )
-                            backend_runtime={'adapter':deployment['backend']['adapter'],'adapter_version':backend.identity.version,'probes':[]}
-                            for row in backend_report.get('probes') or []:
-                                compact={'id':row.get('id'),'status':row.get('status')}
-                                version=self._version_text(row.get('stdout'))
-                                if version: compact['version']=version
-                                facts=((row.get('result') or {}).get('facts'))
-                                if isinstance(facts,dict): compact['facts']=copy.deepcopy(facts)
-                                backend_runtime['probes'].append(compact)
-                            runtime_versions['backend']=backend_runtime
-                            self._save_runtime_versions(run_dir,runtime_versions)
-                            if backend_report.get('status') != 'passed':
-                                raise self._backend_preflight_error(backend_report)
-                        else:
-                            dependency_record=self._run_backend_dependency_probe(
-                                run_dir,probe_spec=start_plan.get('dependency_probe'),platform_spec=platform,resolved_platform=p,
-                            )
-                            runtime_versions['backend']={
-                                'adapter':deployment['backend']['adapter'],
-                                'adapter_version':backend.identity.version,
-                                'version':self._version_text((dependency_record or {}).get('stdout')),
-                            }
-                        self._save_runtime_versions(run_dir,runtime_versions)
-                        # Re-check immediately before releasing the external OS port race window to the backend.
-                        for claim in plan['resources']:
-                            if claim['kind']=='port': self.resources.check_port(str(claim.get('host') or '127.0.0.1'),int(claim['id']))
-                        backend_handle=self.pm.start(proc)
-                    auth_ref = (attach.get('auth') or {}).get('secret_ref')
-                    auth_value = self.pm.secrets.resolve(auth_ref) if auth_ref else None
-                    ready=float((start_plan.get('readiness') or {}).get('timeout_seconds',30 if mode!='managed' else 900))
-                    service = self._probe_service_until_ready(
-                        backend,
-                        attach,
-                        auth_value,
-                        ready,
-                        backend_handle,
-                    )
-                    self._status(run_dir, 'SERVICE_READY')
-                    if mode!='managed':
-                        runtime_versions['backend']={'adapter':deployment['backend']['adapter'],'adapter_version':backend.identity.version,'management':mode}
-                    self._save_runtime_versions(run_dir,runtime_versions)
-                    eval_env=pdesc['evaluation_environment']
-                    eval_facts=merge_fact_sets(facts_from_service(service),facts_from_environment(eval_env,'evaluation_environment'))
-                    report=evaluate(req,eval_facts)
-                    if not report.compatible:
-                        raise CompatibilityError('; '.join(report.reasons))
-                    self._verify_task_artifacts(task,run_dir/'.run'/'task')
-                    # Strict datasets are verified again immediately before evaluator planning/execution.
-                    final_verified=self._invoke(dataset_client,'verify',{'artifact':dataset,'benchmark':benchmark},context={'offline':True,'final_verification':True},timeout=30)
-                    if not final_verified['valid']:
-                        raise ModelEvalError(f'dataset final verification failed: {final_verified.get("details") or {}}')
-                    final_artifact=final_verified.get('artifact') or dataset
-                    self._verify_dataset_identity(plan['resolved'].get('dataset_resolution') or {},benchmark,final_artifact)
-                    if final_artifact.get('fingerprint') != dataset.get('fingerprint'):
-                        raise CompatibilityError('dataset artifact fingerprint changed after task binding')
-                    ep=self._invoke(evaluator,'plan_evaluate',{'service':service,'task':task,'evaluation':evaluation,'cache_root':str(self.cache_root),'output_root':str(run_dir/'.run'/'framework_output'),'workspace':str(run_dir),'log_path':str(run_dir/'logs'/'evaluation.log'),'network_policy':'offline' if offline else 'online'},context={'workspace':str(run_dir),'cache_root':str(self.cache_root),'offline':offline},timeout=30)
-                    raw_result_root = self._confined_path(
-                        ep['raw_result_root'],
-                        run_dir / '.run' / 'framework_output',
-                        label='evaluator raw_result_root',
-                    )
-                    ep['raw_result_root'] = str(raw_result_root)
-                    eval_proc = ep['process']
-                    eval_proc.setdefault('metadata', {}).update(
-                        {'role': 'evaluator', 'run_id': run_id}
-                    )
-                    eval_proc,_=self.prepare_process_for_environment(
-                        eval_proc,platform_spec=platform,resolved_platform=pdesc,role='evaluator',
-                        context={'workspace':str(run_dir),'offline':offline},timeout=5,
-                    )
-                    self._status(run_dir, 'EVALUATING')
-                    cp = self.pm.run(eval_proc)
-                    evaluator_returncode = cp.returncode
-                    if cp.returncode != 0:
-                        raise ProcessError(f"evaluator exited with rc={cp.returncode}")
-                    self._status(run_dir,'NORMALIZING')
-                    result_model=str(model.get('experiment_id') or (model.get('metadata') or {}).get('experiment_id') or model['id'])
-                    result=self._invoke(evaluator,'normalize',{'raw_result_root':ep['raw_result_root'],'task':task,'run_metadata':{'run_id':run_id,'model':result_model,'benchmark':benchmark['id']}},context={'workspace':str(run_dir)},timeout=20)
-                    expected_framework=evaluation['framework']['adapter']
-                    if result.get('run_id')!=run_id or result.get('model')!=result_model or result.get('benchmark')!=benchmark['id'] or result.get('framework')!=expected_framework:
-                        raise CompatibilityError('CanonicalResult identity disagrees with the executing run/evaluator')
-                    task_metrics=task.get('metrics') or {}
-                    if task_metrics.get('namespace')=='canonical':
-                        missing=[name for name in (benchmark.get('metrics') or []) if name not in (result.get('metrics') or {})]
-                        if missing:
-                            raise CompatibilityError(
-                                f'CanonicalResult is missing BenchmarkSpec metrics: {missing}'
-                            )
-                    self._verify_canonical_raw_result(result,raw_result_root)
-                    result['metadata']={**(result.get('metadata') or {}),'started_at':started_at,'finished_at':iso_now(plan),'timezone':getattr(plan_timezone(plan),'key','Asia/Shanghai')}
-                    result=publish_result(run_dir,raw_result_root,result,schemas=self.schemas)
+                    prepare_platform(self, context)
+                    prepare_dataset_and_task(self, context)
+                    preflight_evaluator(self, context)
+                    start_service(self, context)
+                    evaluate_and_publish(self, context)
                 except BaseException as exc:
                     failure=exc
                     failure_stage=self._current_state(run_dir) or 'INITIALIZING'
@@ -764,15 +568,15 @@ class Orchestrator:
                     failure, failure_stage = finalize_run(
                         self,
                         run_dir=run_dir,
-                        run_id=run_id,
+                        run_id=context.run_id,
                         plan=plan,
-                        mode=mode,
+                        mode=context.mode,
                         started_at=started_at,
                         failure=failure,
                         failure_stage=failure_stage,
-                        backend_handle=backend_handle,
-                        backend_shutdown=backend_shutdown,
-                        evaluator_returncode=evaluator_returncode,
+                        backend_handle=context.backend_handle,
+                        backend_shutdown=context.backend_shutdown,
+                        evaluator_returncode=context.evaluator_returncode,
                     )
                 if failure is not None:
                     if isinstance(failure, ModelEvalError):

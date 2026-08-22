@@ -9,6 +9,7 @@ from model_evaluation.core.errors import ConfigError
 from model_evaluation.core.matrix_config import MatrixSchemas
 from model_evaluation.core.matrix_export import (
     build_execution_export,
+    build_scheduler_jobs,
     export_execution_plans,
 )
 
@@ -24,6 +25,52 @@ def _matrix_plan(count: int = 5) -> dict:
             for index in range(1, count + 1)
         ],
     }
+
+
+def _resource_matrix_plan(weights: list[int]) -> dict:
+    plan = _matrix_plan(len(weights))
+    for index, (child, count) in enumerate(zip(plan["plans"], weights), 1):
+        child.update(
+            {
+                "run_spec": {
+                    "model": f"model-{index}",
+                    "benchmark": "bbh",
+                    "deployment": "vllm",
+                    "evaluation": "lm_eval",
+                },
+                "resources": [
+                    {"kind": "device", "id": f"physical-{device}", "exclusive": True}
+                    for device in range(count)
+                ],
+                "compatibility": {"status": "compatible"},
+                "resolved": {
+                    "platform": {
+                        "backend_environment": {
+                            "provider": "conda",
+                            "identity": "/environments/backend",
+                        },
+                        "evaluation_environment": {
+                            "provider": "conda",
+                            "identity": "/environments/evaluator",
+                        },
+                    },
+                    "specs": {
+                        "model": {"experiment_id": f"model-{index}"},
+                        "benchmark": {"id": "bbh"},
+                        "platform": {
+                            "device": {"adapter": "nvidia", "devices": list(range(count))},
+                            "runtime": {"adapter": "cuda"},
+                        },
+                        "deployment": {
+                            "backend": {"adapter": "vllm"},
+                            "management": {"mode": "managed"},
+                        },
+                        "evaluation": {"framework": {"adapter": "lm_eval"}},
+                    }
+                },
+            }
+        )
+    return plan
 
 
 class MatrixExportTests(unittest.TestCase):
@@ -56,8 +103,101 @@ class MatrixExportTests(unittest.TestCase):
             for index, child in enumerate(plan["plans"], 1):
                 path = output / "plans" / f"{index:06d}-{child['plan_id']}.json"
                 self.assertEqual(json.loads(path.read_text(encoding="utf-8")), child)
+            self.assertEqual(len(list((output / "jobs").glob("*.json"))), len(plan["plans"]))
             with self.assertRaisesRegex(ConfigError, "already exists"):
                 export_execution_plans(plan, output, shards=2, schemas=self.schemas)
+
+    def test_resource_balanced_export_uses_logical_requirements_without_device_ids(self):
+        plan = _resource_matrix_plan([4, 3, 2, 1])
+        jobs = build_scheduler_jobs(plan)
+        for job in jobs:
+            self.schemas.validate("matrix_scheduler_job", job)
+            self.assertNotIn("physical-", json.dumps(job))
+            self.assertNotIn("/environments/", json.dumps(job))
+        manifest, shards = build_execution_export(
+            plan,
+            shards=2,
+            strategy="resource_balanced",
+        )
+        self.schemas.validate("matrix_execution_export", manifest)
+        self.assertEqual(manifest["strategy"], "resource_balanced")
+        self.assertEqual(
+            [row["requirements"]["resource_weight"] for row in manifest["shards"]],
+            [5, 5],
+        )
+        for shard in shards:
+            self.schemas.validate("matrix_execution_shard", shard)
+
+    def test_export_keeps_execution_compatibility_groups_in_separate_shards(self):
+        plan = _resource_matrix_plan([2, 1, 2, 1])
+        for child in plan["plans"][2:]:
+            platform = child["resolved"]["specs"]["platform"]
+            platform["device"]["adapter"] = "mlu"
+            platform["runtime"]["adapter"] = "neuware"
+            deployment = child["resolved"]["specs"]["deployment"]
+            deployment["backend"]["adapter"] = "vllm_mlu"
+
+        manifest, shards = build_execution_export(
+            plan,
+            shards=2,
+            strategy="resource_balanced",
+        )
+        self.schemas.validate("matrix_execution_export", manifest)
+        self.assertEqual(
+            [shard["requirements"]["accelerator_types"] for shard in shards],
+            [["mlu"], ["nvidia"]],
+        )
+        self.assertEqual(
+            [shard["requirements"]["runtime_families"] for shard in shards],
+            [["neuware"], ["cuda"]],
+        )
+
+        with self.assertRaisesRegex(ConfigError, "compatibility_groups=2"):
+            build_execution_export(
+                plan,
+                shards=1,
+                strategy="resource_balanced",
+            )
+
+    def test_export_treats_evaluator_as_part_of_execution_compatibility(self):
+        plan = _resource_matrix_plan([1, 1])
+        plan["plans"][1]["resolved"]["specs"]["evaluation"]["framework"][
+            "adapter"
+        ] = "evalscope"
+        _, shards = build_execution_export(
+            plan,
+            shards=2,
+            strategy="round_robin",
+        )
+        evaluators = []
+        jobs = build_scheduler_jobs(plan)
+        jobs_by_id = {job["job_id"]: job for job in jobs}
+        for shard in shards:
+            evaluators.append(
+                {
+                    jobs_by_id[row["job_id"]]["intent"]["evaluator"]
+                    for row in shard["plans"]
+                }
+            )
+        self.assertEqual(evaluators, [{"evalscope"}, {"lm_eval"}])
+
+    def test_export_treats_environment_capability_as_execution_compatibility(self):
+        plan = _resource_matrix_plan([1, 1])
+        plan["plans"][1]["resolved"]["platform"]["evaluation_environment"][
+            "identity"
+        ] = "/environments/evaluator-v2"
+        _, shards = build_execution_export(
+            plan,
+            shards=2,
+            strategy="round_robin",
+        )
+        environment_ids = [
+            shard["requirements"]["execution_compatibility"][
+                "evaluator_environment"
+            ]
+            for shard in shards
+        ]
+        self.assertEqual(len(set(environment_ids)), 2)
 
     def test_export_rejects_invalid_shard_counts(self):
         plan = _matrix_plan(2)

@@ -91,7 +91,7 @@ def plan_preflight(i,c):
     return {"process":process,"result_format":"preflight_result"}
 
 def plan_evaluate(i,c):
-    svc=i['service']; task=i['task']; prof=i['evaluation']; params=prof.get('parameters') or {}; proto=svc.get('protocols') or {}; completion=(proto.get('openai_completion') or {}).get('url')
+    svc=i['service']; task=i['task']; prof=i['evaluation']; params=prof.get('parameters') or {}; execution=prof.get('execution') or {}; sample_limit=execution.get('sample_limit',params.get('limit')); proto=svc.get('protocols') or {}; completion=(proto.get('openai_completion') or {}).get('url')
     if not completion: raise AdapterError('COMPATIBILITY_ERROR','service does not expose openai_completion')
     model=_safe((svc.get('model') or {})['id'],'model'); caps=(svc.get('capabilities') or {}).get('values',{}); tok=svc.get('tokenizer') or {}; limits=svc.get('limits') or {}
     tok_path=tok.get('path') if tok.get('mode')=='local' else None; remote_tok=bool(caps.get('service.tokenize') and caps.get('service.detokenize') and all((proto.get(k) or {}).get('url') for k in ('tokenizer_info','tokenize','detokenize'))); tok_backend='huggingface' if tok_path else ('remote' if remote_tok else 'none')
@@ -118,7 +118,7 @@ def plan_evaluate(i,c):
     if task.get('task_root'): harness += ['--include_path',str(task['task_root'])]
     nf=(task.get('execution') or {}).get('num_fewshot')
     if nf is not None: harness += ['--num_fewshot',str(int(nf))]
-    if params.get('limit') is not None: harness += ['--limit',str(params['limit'])]
+    if sample_limit is not None: harness += ['--limit',str(sample_limit)]
     if params.get('log_samples',False): harness.append('--log_samples')
     env,_=_execution_env(i,c,params,framework_root)
     secret_env={}

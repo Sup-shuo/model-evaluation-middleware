@@ -31,6 +31,8 @@ def render_doctor(payload: dict) -> str:
 
 
 def render_inspection(report: dict) -> str:
+    if report.get("product") == "matrix_batch":
+        return render_batch_inspection(report)
     lines = [
         f"Result: {'VALID' if report.get('ok') else 'INVALID'}",
         f"Run: {report.get('run_id') or '-'}",
@@ -53,6 +55,22 @@ def render_inspection(report: dict) -> str:
     if report.get("error"):
         error = report["error"]
         lines.append(f"Error: {error.get('code')}: {error.get('message')}")
+    return "\n".join(lines) + "\n"
+
+
+def render_batch_inspection(report: dict) -> str:
+    lines = [
+        f"Result: {'VALID' if report.get('ok') else 'INVALID'}",
+        f"Batch: {report.get('batch_id') or '-'}",
+        f"Matrix: {report.get('matrix_id') or '-'}",
+        f"Outcome: {report.get('outcome') or '-'}",
+        f"Planned: {report.get('planned', 0)}",
+        f"Success: {report.get('success', 0)}",
+        f"Failed: {report.get('failed', 0)}",
+        f"Interrupted: {report.get('interrupted', 0)}",
+        f"Not run: {report.get('not_run', 0)}",
+        f"Checked runs: {report.get('checked_runs', 0)}",
+    ]
     return "\n".join(lines) + "\n"
 
 

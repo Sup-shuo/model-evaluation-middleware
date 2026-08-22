@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "runtime_versions.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "adapters", "environments"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "adapters": {"$ref": "execution_plan.schema.json#/properties/adapters"},
+    "device": {"$ref": "device_descriptor.schema.json"},
+    "runtime": {"$ref": "runtime_descriptor.schema.json"},
+    "environments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evaluator"],
+      "properties": {
+        "backend": {"$ref": "runtime_versions.schema.json#/$defs/environmentSnapshot"},
+        "evaluator": {"$ref": "runtime_versions.schema.json#/$defs/environmentSnapshot"},
+        "controller": {"$ref": "runtime_versions.schema.json#/$defs/environmentSnapshot"}
+      }
+    },
+    "backend": {"$ref": "runtime_versions.schema.json#/$defs/componentVersion"},
+    "evaluator": {"$ref": "runtime_versions.schema.json#/$defs/componentVersion"},
+    "warnings": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  },
+  "$defs": {
+    "environmentSnapshot": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["provider"],
+      "properties": {
+        "schema_version": {"type": "string"},
+        "provider": {"type": "string", "minLength": 1},
+        "identity": {"type": "string"},
+        "python": {"type": "string"},
+        "python_implementation": {"type": "string"},
+        "python_version": {"type": "string"}
+      }
+    },
+    "componentVersion": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["adapter", "adapter_version"],
+      "properties": {
+        "adapter": {"$ref": "common.schema.json#/$defs/id"},
+        "adapter_version": {"$ref": "common.schema.json#/$defs/semver"},
+        "version": {"type": "string"},
+        "management": {"enum": ["managed", "attached", "external"]},
+        "facts": {"type": "object", "additionalProperties": true},
+        "probes": {"type": "array", "items": {"type": "object"}}
+      }
+    }
+  }
+}

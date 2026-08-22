@@ -220,7 +220,15 @@ def _doctor_row(app, orchestrator, child: dict, cache_root: str) -> dict:
     return row
 
 
-def build_doctor_report(app, *, plan=None, bundle=None, system_config: str | None = None, evaluation_config: str | None = None) -> dict:
+def build_doctor_report(
+    app,
+    *,
+    plan=None,
+    bundle=None,
+    system_config: str | None = None,
+    evaluation_config: str | None = None,
+    smoke: bool = False,
+) -> dict:
     """Return the structured doctor report without rendering it.
 
     ``check`` and ``doctor`` deliberately share this implementation so their
@@ -230,7 +238,11 @@ def build_doctor_report(app, *, plan=None, bundle=None, system_config: str | Non
     """
 
     if plan is None or bundle is None:
-        plan, bundle = app.user_matrix_plan(system_config, evaluation_config)
+        plan, bundle = app.user_matrix_plan(
+            system_config,
+            evaluation_config,
+            smoke=smoke,
+        )
     orchestrator = app.orchestrator(
         results_root=bundle.results_root,
         cache_root=bundle.cache_root,
@@ -254,11 +266,19 @@ def build_doctor_report(app, *, plan=None, bundle=None, system_config: str | Non
     return redact_diagnostic(payload, orchestrator.pm.secrets.redaction_values())
 
 
-def run_doctor(app, *, system_config: str | None, evaluation_config: str | None, output_format: str) -> bool:
+def run_doctor(
+    app,
+    *,
+    system_config: str | None,
+    evaluation_config: str | None,
+    output_format: str,
+    smoke: bool = False,
+) -> bool:
     redacted = build_doctor_report(
         app,
         system_config=system_config,
         evaluation_config=evaluation_config,
+        smoke=smoke,
     )
     if output_format == "json":
         print(json.dumps(redacted, ensure_ascii=False, indent=2, sort_keys=True))

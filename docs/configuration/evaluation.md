@@ -99,31 +99,47 @@ identity. Create a new Model declaration when those facts change.
 
 ## Smoke and full evaluation
 
-An explicit small `evaluator.limit` is useful for connectivity smoke:
+Reuse the same Evaluation file for both modes. `--smoke` is available on
+`validate`, `doctor`, `check`, `explain`, `plan`, and `run`; add it when checking
+connectivity:
 
-```yaml
-evaluator:
-  profile: lm_eval
-  parameters:
-    limit: 1
-    log_samples: true
+```bash
+eval-manager check --system-config <system> --evaluation-config <evaluation> --smoke
+eval-manager run --system-config <system> --evaluation-config <evaluation> --smoke
 ```
 
-Remove the limit for a full benchmark. A smoke run validates integration only;
-it must not be presented as a complete benchmark score.
+The Controller freezes `execution.mode: smoke` and `sample_limit: 1` into the
+resolved Evaluation Spec; Evaluator Adapters translate that intent to their
+framework-specific limit. The source YAML is unchanged. Omit `--smoke` for the
+full benchmark. A smoke result validates integration only and must not be
+presented as a complete benchmark score. Saved RunSpec/MatrixPlan files are
+immutable inputs, so `--smoke` is intentionally rejected by `run-plan` and
+`run-matrix-plan`.
 
 ## Matrix and external scheduling
 
 The built-in matrix path expands a finite set of Model, Platform, Deployment,
 Benchmark, and Evaluation axes. Local execution remains serial with resource
-locks. For larger work, export the resolved execution-plan bundle and submit it
-to an external scheduler:
+locks. For larger work, export a protocol 1.2 bundle for an external scheduler:
 
 ```bash
-eval-manager matrix-export --help
+eval-manager matrix-export /tmp/matrix-plan.json \
+  -o /tmp/matrix-jobs \
+  --shards 8 \
+  --strategy resource_balanced
 ```
 
-The scheduler owns distribution; each worker returns the same result product.
+Each `jobs/*.json` file contains logical accelerator count/type, Runtime,
+Backend, Evaluator intent, and claim counts without physical device IDs. The
+bundle also retains exact `plans/*.json` files for workers with compatible
+paths and environments. `round_robin` remains available for deterministic
+legacy-style sharding. Jobs with different accelerator, Runtime, Backend,
+management, Evaluator, or resolved environment capabilities are kept in
+separate shards; the
+requested shard count must provide at least one shard for every compatibility
+group. The scheduler owns distribution; each worker returns the same result
+product. See [Matrix execution lifecycle](../matrix-execution.md) for plan creation,
+local execution, export, worker execution, resume, and Batch validation.
 
 ## Before execution
 

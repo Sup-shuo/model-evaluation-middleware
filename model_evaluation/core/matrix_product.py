@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import copy
-import json
 from pathlib import Path
 
+from model_evaluation.core.batch_product import render_batch_tables
 from model_evaluation.core.config.parsing import load_json_strict
 from model_evaluation.core.files import atomic_json, atomic_text
 from model_evaluation.core.result_product import inspect_run_product
@@ -146,14 +146,6 @@ class MatrixProductMixin:
         atomic_json(path, {"matrix_id": matrix_id, "runs": runs})
 
     @staticmethod
-    def _tsv(values) -> str:
-        def cell(value) -> str:
-            text = str("" if value is None else value)
-            return text.replace("\t", " ").replace("\r", " ").replace("\n", " ")
-
-        return "\t".join(cell(value) for value in values)
-
-    @staticmethod
     def _public_run(row: dict) -> dict:
         keys=(
             'index','plan_id','model_id','model_label','model_ref','benchmark','platform','deployment','evaluation',
@@ -212,76 +204,6 @@ class MatrixProductMixin:
             if plan["plan_id"] not in status:
                 status[plan["plan_id"]] = cls._not_run_record(index, plan)
 
-    @staticmethod
-    def _breakdown(result: dict, name: str) -> dict:
-        direct = result.get(name)
-        if isinstance(direct, dict):
-            return direct
-        nested = (result.get("breakdowns") or {}).get(name)
-        return nested if isinstance(nested, dict) else {}
-
-    def _append_breakdown_metrics(
-        self,
-        lines: list[str],
-        *,
-        kind: str,
-        row: dict,
-        result: dict,
-    ) -> None:
-        for item_id, detail in sorted(self._breakdown(result, kind).items()):
-            if not isinstance(detail, dict):
-                continue
-            sample = detail.get("sample_count") or {}
-            subtasks = detail.get("subtasks") or []
-            config = detail.get("config")
-            config_json = (
-                json.dumps(
-                    config,
-                    ensure_ascii=False,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                )
-                if isinstance(config, dict)
-                else ""
-            )
-            metric_tables = (
-                ("framework_native", "metrics"),
-                ("canonical", "canonical_metrics"),
-            )
-            for namespace, key in metric_tables:
-                table = detail.get(key) or {}
-                if not isinstance(table, dict):
-                    continue
-                for metric, entry in sorted(table.items()):
-                    metric_entry = (
-                        entry if isinstance(entry, dict) else {"value": entry}
-                    )
-                    lines.append(
-                        self._tsv(
-                            (
-                                row.get("model_id", ""),
-                                row.get("model_label", ""),
-                                row.get("model_ref", ""),
-                                result.get("benchmark", ""),
-                                result.get("framework", ""),
-                                item_id,
-                                detail.get("label", ""),
-                                namespace,
-                                metric,
-                                metric_entry.get("value", ""),
-                                metric_entry.get("stderr", ""),
-                                metric_entry.get("higher_is_better", ""),
-                                sample.get("original", ""),
-                                sample.get("effective", ""),
-                                detail.get("num_fewshot", ""),
-                                detail.get("version", ""),
-                                ",".join(str(value) for value in subtasks),
-                                config_json,
-                                row.get("run_dir", ""),
-                            )
-                        )
-                    )
-
     def _finalize_batch(
         self,
         batch_dir: Path,
@@ -293,18 +215,7 @@ class MatrixProductMixin:
         interrupted: bool = False,
     ) -> dict:
         rows = sorted(status.values(), key=lambda row: int(row.get("index", 0)))
-        metric_lines = [
-            "model_id\tmodel_label\tmodel_ref\tbenchmark\tframework\tmetric\t"
-            "value\tstderr\thigher_is_better\trun_dir"
-        ]
-        detail_header = (
-            "model_id\tmodel_label\tmodel_ref\tbenchmark\tframework\t{kind}_id\t"
-            "{kind}_label\tmetric_namespace\tmetric\tvalue\tstderr\t"
-            "higher_is_better\tsample_original\tsample_effective\tnum_fewshot\t"
-            "version\tsubtasks\tconfig_json\trun_dir"
-        )
-        group_lines = [detail_header.format(kind="group")]
-        task_lines = [detail_header.format(kind="task")]
+        products = []
         plan_by_id = {plan["plan_id"]: plan for plan in matrix_plan["plans"]}
         for row in rows:
             if row.get("status") != "success":
@@ -320,36 +231,8 @@ class MatrixProductMixin:
                     "message": error or "success result invalid",
                 }
                 continue
-            for metric, entry in sorted((result.get("metrics") or {}).items()):
-                metric_entry = entry if isinstance(entry, dict) else {"value": entry}
-                metric_lines.append(
-                    self._tsv(
-                        (
-                            row.get("model_id", ""),
-                            row.get("model_label", ""),
-                            row.get("model_ref", ""),
-                            result.get("benchmark", ""),
-                            result.get("framework", ""),
-                            metric,
-                            metric_entry.get("value", ""),
-                            metric_entry.get("stderr", ""),
-                            metric_entry.get("higher_is_better", ""),
-                            row.get("run_dir", ""),
-                        )
-                    )
-                )
-            self._append_breakdown_metrics(
-                group_lines,
-                kind="groups",
-                row=row,
-                result=result,
-            )
-            self._append_breakdown_metrics(
-                task_lines,
-                kind="tasks",
-                row=row,
-                result=result,
-            )
+            products.append((row, result))
+        tables = render_batch_tables(products)
         rows = sorted(status.values(), key=lambda row: int(row.get("index", 0)))
         counts = {
             "planned": len(matrix_plan["plans"]),
@@ -366,6 +249,7 @@ class MatrixProductMixin:
             else "failed"
         )
         summary = {
+            "schema_version": "1.0",
             "batch_id": batch_dir.name,
             "matrix_id": matrix_plan["matrix_id"],
             "outcome": outcome,
@@ -378,6 +262,9 @@ class MatrixProductMixin:
         }
         # batch_status.json and matrix_plan.json are resumable internal state;
         # the following five files are the lightweight user-facing product.
+        self.app.matrix_schemas.validate("matrix_batch_summary", summary)
+        public_runs = [self._public_run(row) for row in rows]
+        self.app.matrix_schemas.validate("matrix_batch_runs", public_runs)
         self._write_status(
             batch_dir / "batch_status.json",
             matrix_plan["matrix_id"],
@@ -386,15 +273,8 @@ class MatrixProductMixin:
         atomic_json(batch_dir / "summary.json", summary)
         atomic_json(
             batch_dir / "runs.json",
-            [self._public_run(row) for row in rows],
+            public_runs,
         )
-        atomic_text(batch_dir / "metrics.tsv", "\n".join(metric_lines) + "\n")
-        atomic_text(
-            batch_dir / "group_metrics.tsv",
-            "\n".join(group_lines) + "\n",
-        )
-        atomic_text(
-            batch_dir / "task_metrics.tsv",
-            "\n".join(task_lines) + "\n",
-        )
+        for name, text in tables.items():
+            atomic_text(batch_dir / name, text)
         return summary

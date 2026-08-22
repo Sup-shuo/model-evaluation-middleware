@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "capability_diagnostic.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code", "severity", "path", "actual", "optional", "vocabulary", "message"],
+  "properties": {
+    "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]+$"},
+    "severity": {"enum": ["error", "warning"]},
+    "path": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"},
+    "operator": {"enum": ["equals", "in", "gte", "lte", "min_version", "exists"]},
+    "expected": {"$ref": "common.schema.json#/$defs/jsonValue"},
+    "actual": {"$ref": "common.schema.json#/$defs/jsonValue"},
+    "optional": {"type": "boolean"},
+    "vocabulary": {"enum": ["core", "extension"]},
+    "message": {"type": "string", "minLength": 1}
+  }
+}

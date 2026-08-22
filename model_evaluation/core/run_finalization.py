@@ -104,8 +104,8 @@ def finalize_run(
             orchestrator._error_record(secondary_cleanup)
         )
 
-    if failure is not None:
-        try:
+    try:
+        if failure is not None:
             failure_product = orchestrator._failure_record(
                 run_dir,
                 stage=failure_stage or "UNKNOWN",
@@ -116,27 +116,41 @@ def finalize_run(
             )
             orchestrator.schemas.validate("failure", failure_product)
             atomic_json(run_dir / "failure.json", failure_product)
-        except Exception:
-            pass
 
-    terminal = {
-        "schema_version": "1.0",
-        "run_id": run_id,
-        "outcome": "success" if failure is None else "failed",
-        "started_at": started_at,
-        "finished_at": iso_now(plan),
-        "timezone": getattr(plan_timezone(plan), "key", "Asia/Shanghai"),
-        "cleanup": orchestrator._redact_diagnostic(cleanup),
-    }
-    if orchestrator._warning_events:
-        terminal["warnings"] = orchestrator._redact_diagnostic(
-            orchestrator._warning_events
+        terminal = {
+            "schema_version": "1.0",
+            "run_id": run_id,
+            "outcome": "success" if failure is None else "failed",
+            "started_at": started_at,
+            "finished_at": iso_now(plan),
+            "timezone": getattr(plan_timezone(plan), "key", "Asia/Shanghai"),
+            "cleanup": orchestrator._redact_diagnostic(cleanup),
+        }
+        if orchestrator._warning_events:
+            terminal["warnings"] = orchestrator._redact_diagnostic(
+                orchestrator._warning_events
+            )
+        if failure is not None:
+            terminal["error"] = orchestrator._error_record(failure)
+        orchestrator.schemas.validate("terminal", terminal)
+        atomic_json(run_dir / "terminal.json", terminal)
+    except BaseException as exc:
+        orchestrator._append_core_error(run_dir, "FINALIZING", exc)
+        details = {}
+        if failure is not None:
+            details["original_error"] = orchestrator._error_record(failure)
+        failure = ProcessError(
+            f"could not publish final result product: {exc}",
+            details=details,
         )
-    if failure is not None:
-        terminal["error"] = orchestrator._error_record(failure)
+        failure_stage = "FINALIZING"
+        return failure, failure_stage
 
+    # Commit the internal terminal state only after the complete public terminal
+    # product has been validated and atomically published.
     if failure is None:
         orchestrator._status_best_effort(run_dir, "SUCCEEDED")
+        shutil.rmtree(run_dir / ".run", ignore_errors=True)
     else:
         orchestrator._status_best_effort(
             run_dir,
@@ -145,14 +159,4 @@ def finalize_run(
             error=orchestrator._error_record(failure),
             failure_stage=failure_stage or "UNKNOWN",
         )
-    try:
-        orchestrator.schemas.validate("terminal", terminal)
-        atomic_json(run_dir / "terminal.json", terminal)
-    except Exception as exc:
-        orchestrator._append_core_error(run_dir, "FINALIZING", exc)
-        if failure is None:
-            failure = ProcessError(f"could not save terminal.json: {exc}")
-            failure_stage = "FINALIZING"
-    if failure is None:
-        shutil.rmtree(run_dir / ".run", ignore_errors=True)
     return failure, failure_stage

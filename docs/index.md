@@ -8,12 +8,15 @@ pages define extension work.
 ## Use the project
 
 1. [Installation and first evaluation](installation.md)
-2. [Configuration overview](configuration.md)
-3. [System configuration](configuration/system.md)
-4. [Model configuration](configuration/model.md)
-5. [Evaluation configuration](configuration/evaluation.md)
-6. [Environment isolation](configuration/environments.md)
-7. [Result product protocol](result-product.md)
+2. [CLI reference](cli-reference.md)
+3. [Configuration overview](configuration.md)
+4. [System configuration](configuration/system.md)
+5. [Model configuration](configuration/model.md)
+6. [Evaluation configuration](configuration/evaluation.md)
+7. [Configuration management](configuration/management.md)
+8. [Environment isolation](configuration/environments.md)
+9. [Matrix execution lifecycle](matrix-execution.md)
+10. [Result product protocol](result-product.md)
 
 ## Choose an integration
 
@@ -31,6 +34,7 @@ pages define extension work.
 - [Adding an Adapter](adapters/adding-an-adapter.md)
 - [Architecture and Adapter protocol](../ARCHITECTURE_AND_ADAPTER_PROTOCOL.md)
 - [Final result product protocol](result-product.md)
+- [Capability vocabulary and structured diagnostics](capability-vocabulary.md)
 - [Contributing](../CONTRIBUTING.md)
 - [Security boundary](../SECURITY.md)
 

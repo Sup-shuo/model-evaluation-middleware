@@ -143,7 +143,6 @@ evaluator:
   profile: lm_eval
   parameters:
     batch_size: 1
-    limit: 1
     log_samples: true
 
 offline: true
@@ -153,15 +152,16 @@ execution:
   continue_on_error: false
 ```
 
-Use an explicit small `limit` for integration smoke only. Remove it for a full
-benchmark. A smoke result must not be reported as a complete score.
+Keep the Evaluation reusable. The CLI `--smoke` flag applies a temporary
+one-sample-per-task limit in the resolved plan without changing this YAML. A
+smoke result must not be reported as a complete score.
 
 ## 8. Check before execution
 
 ```bash
 eval-manager check \
   --system-config config/system.yaml \
-  --evaluation-config config/evaluation.yaml
+  --evaluation-config config/evaluation.yaml --smoke
 ```
 
 `check` performs validation, Doctor, plan preview, and read-only resource checks.
@@ -170,7 +170,7 @@ If it fails, request a human-readable explanation:
 ```bash
 eval-manager explain \
   --system-config config/system.yaml \
-  --evaluation-config config/evaluation.yaml
+  --evaluation-config config/evaluation.yaml --smoke
 ```
 
 Resolve missing paths, environments, model material, ports, or compatibility
@@ -182,7 +182,7 @@ requirements before running.
 eval-manager run \
   --system-config config/system.yaml \
   --evaluation-config config/evaluation.yaml \
-  --render-summary
+  --smoke --render-summary
 ```
 
 Then validate the final product:
@@ -202,11 +202,27 @@ they do not recompute metrics. Continue with the
 Keep Model and Evaluation unchanged and select another System:
 
 ```bash
-eval-manager check --system-config mlu --evaluation-config smoke_bbh_08b
-eval-manager check --system-config nvidia --evaluation-config smoke_bbh_08b
+eval-manager check --system-config mlu --evaluation-config bbh --smoke
+eval-manager check --system-config nvidia --evaluation-config bbh --smoke
 ```
 
+Remove `--smoke` after connectivity succeeds to run the complete Evaluation.
 This works when both System files provide compatible Hardware, Runtime, Backend,
 Evaluator, environments, and model material. Validation status for one stack is
 not automatically inherited by another; consult the
 [Compatibility matrix](compatibility.md).
+
+## Troubleshooting entry points
+
+Use the narrowest command that answers the current question:
+
+| Symptom or question | Command |
+|---|---|
+| Is the catalog or selected YAML valid? | `eval-manager config check` or `eval-manager validate` |
+| Are hardware, environments, executables, frameworks, and model files ready? | `eval-manager doctor` |
+| Why is this model/backend/machine combination blocked? | `eval-manager explain` |
+| Is everything ready before service startup? | `eval-manager check` |
+| Is a completed Run or Batch Result internally consistent? | `eval-manager result-check <path>` |
+
+These checks report the failing layer; they do not download models, convert
+weights, silently change resource settings, or start a distributed scheduler.

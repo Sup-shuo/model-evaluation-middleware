@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "matrix_batch_summary.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "batch_id", "matrix_id", "outcome", "planned",
+    "success", "failed", "interrupted", "not_run", "warnings",
+    "hard_stop", "continue_on_error"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "batch_id": {"type": "string", "pattern": "^[0-9]{6}-[0-9]{4}(?:-[0-9]+)?$"},
+    "matrix_id": {"type": "string", "pattern": "^matrix-[a-f0-9]{24}$"},
+    "outcome": {"enum": ["success", "failed", "interrupted"]},
+    "planned": {"type": "integer", "minimum": 1},
+    "success": {"type": "integer", "minimum": 0},
+    "failed": {"type": "integer", "minimum": 0},
+    "interrupted": {"type": "integer", "minimum": 0},
+    "not_run": {"type": "integer", "minimum": 0},
+    "warnings": {"type": "integer", "minimum": 0},
+    "hard_stop": {"type": "boolean"},
+    "continue_on_error": {"type": "boolean"}
+  }
+}

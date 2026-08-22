@@ -32,6 +32,15 @@
       "type": "object",
       "additionalProperties": true
     },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "sample_limit"],
+      "properties": {
+        "mode": {"const": "smoke"},
+        "sample_limit": {"type": "integer", "const": 1}
+      }
+    },
     "metadata": {
       "type": "object",
       "additionalProperties": true,

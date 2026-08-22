@@ -26,17 +26,22 @@ config/
 │   └── qwen/
 │       └── qwen35_08b_base.yaml
 ├── evaluations/
-│   ├── smoke_bbh.yaml
-│   └── full_bbh.yaml
+│   └── bbh.yaml             # Reused for smoke and full runs
 ├── system.yaml
 └── evaluation.yaml
 ```
 
 System and Evaluation may be supplied as a file path or as an ID resolved
-below `config/systems/` and `config/evaluations/`. Model files are discovered
-recursively below `config/models/`; their directories organize the catalog but
-do not create namespaces. Evaluations always select a model by its globally
-unique `id`, not by file path.
+recursively below `config/systems/` and `config/evaluations/`; for example,
+`--evaluation-config teams/bbh` resolves
+`config/evaluations/teams/bbh.yaml`. Model files are discovered recursively
+below `config/models/`; their directories organize the catalog but do not
+create namespaces. Evaluations always select a model by its globally unique
+`id`, not by file path.
+
+Use `eval-manager config list`, `config show`, `config check`, and the
+dry-run-first `config migrate` workflow for catalog maintenance. See
+[Configuration management](configuration/management.md).
 
 ## Selection and precedence
 
@@ -96,21 +101,24 @@ all model and dataset assets to be registered as cryptographic evidence.
 ```bash
 eval-manager check \
   --system-config nvidia \
-  --evaluation-config smoke_bbh
+  --evaluation-config teams/bbh --smoke
 
 eval-manager explain \
   --system-config nvidia \
-  --evaluation-config smoke_bbh
+  --evaluation-config teams/bbh --smoke
 ```
 
-`check` combines Schema validation, Doctor, plan preview, and read-only
-resource checks. `explain` presents the effective compatibility and resource
-decision without starting a model service.
+`--smoke` is a transient CLI mode: it freezes one sample per task into the
+resolved execution plan without changing the Evaluation file. Omit the flag for
+a full benchmark. `check` combines Schema validation, Doctor, plan preview, and
+read-only resource checks. `explain` presents the effective compatibility and
+resource decision without starting a model service.
 
 ## Related guides
 
 - [Installation and first evaluation](installation.md)
 - [Model catalog examples](models/index.md)
+- [Configuration management](configuration/management.md)
 - [Components and integrations](components/index.md)
 - [Compatibility and validation status](compatibility.md)
 - [Result product protocol](result-product.md)

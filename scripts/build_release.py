@@ -24,7 +24,7 @@ TOP_LEVEL_EXCLUDED = {
     ".pytest_cache",
 }
 # Operational tools are part of the source/release ZIP so an explicitly
-# requested model transformation can be repeated. They are not imported by
+# requested model transformation can be repeated.  They are not imported by
 # eval-manager and are not packaged into the runtime wheel.
 SOURCE_TOOL_DIR = Path("tools")
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".zip"}
@@ -107,10 +107,23 @@ def reject_release_symlinks(
 
 
 def pep440(version: str) -> str:
-    match = re.fullmatch(r"(\d+\.\d+\.\d+)-alpha(\d+)", version)
+    """Translate the repository SemVer form into its PEP 440 package form."""
+    match = re.fullmatch(
+        r"(?P<base>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))"
+        r"(?:-(?P<phase>alpha|beta|rc)(?P<number>0|[1-9]\d*))?",
+        version,
+    )
     if not match:
-        raise SystemExit(f"unsupported VERSION.txt form: {version}")
-    return f"{match.group(1)}a{match.group(2)}"
+        raise SystemExit(
+            "unsupported VERSION.txt form: "
+            f"{version}; expected X.Y.Z, X.Y.Z-alphaN, X.Y.Z-betaN, or X.Y.Z-rcN"
+        )
+    base = match.group("base")
+    phase = match.group("phase")
+    if phase is None:
+        return base
+    marker = {"alpha": "a", "beta": "b", "rc": "rc"}[phase]
+    return f"{base}{marker}{match.group('number')}"
 
 
 def check_version(root: Path) -> str:
@@ -249,8 +262,16 @@ def check_installable_bundle(root: Path) -> None:
             installed / "schemas" / "terminal.schema.json",
             installed / "schemas" / "failure.schema.json",
             installed / "schemas" / "diagnostic_report.schema.json",
+            installed / "schemas" / "capability_diagnostic.schema.json",
+            installed / "schemas" / "execution_plan.schema.json",
+            installed / "schemas" / "resolved_execution.schema.json",
+            installed / "schemas" / "run_config.schema.json",
+            installed / "schemas" / "runtime_versions.schema.json",
+            installed / "schemas" / "user" / "matrix_plan.schema.json",
             installed / "schemas" / "user" / "matrix_execution_export.schema.json",
             installed / "schemas" / "user" / "matrix_execution_shard.schema.json",
+            installed / "schemas" / "user" / "matrix_batch_summary.schema.json",
+            installed / "schemas" / "user" / "matrix_batch_runs.schema.json",
             installed / "examples" / "mock" / "system.yaml",
             installed / "examples" / "mock" / "evaluation.yaml",
             installed / "presets" / "runs" / "external_mmlu_example.yaml",
@@ -349,7 +370,9 @@ def check_installable_bundle(root: Path) -> None:
                 "-c",
                 "from model_evaluation.results import load_run; "
                 "from model_evaluation.core.matrix_export import export_execution_plans; "
-                "assert callable(load_run) and callable(export_execution_plans)",
+                "from model_evaluation.core.batch_product import inspect_batch_product; "
+                "assert callable(load_run) and callable(export_execution_plans) "
+                "and callable(inspect_batch_product)",
             ],
             root,
             timeout=20.0,

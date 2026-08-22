@@ -3,34 +3,54 @@
   "$id": "matrix_execution_export.schema.json",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "schema_version", "export_id", "source_matrix_id", "strategy",
-    "plan_count", "shard_count", "shards"
-  ],
+  "required": ["schema_version", "export_id", "source_matrix_id", "strategy", "plan_count", "job_count", "shard_count", "shards"],
   "properties": {
-    "schema_version": {"const": "1.0"},
+    "schema_version": {"const": "1.2"},
     "export_id": {"type": "string", "pattern": "^matrix-export-[a-f0-9]{24}$"},
     "source_matrix_id": {"type": "string", "pattern": "^matrix-[a-f0-9]{24}$"},
-    "strategy": {"const": "round_robin"},
+    "strategy": {"enum": ["round_robin", "resource_balanced"]},
     "plan_count": {"type": "integer", "minimum": 1},
+    "job_count": {"type": "integer", "minimum": 1},
     "shard_count": {"type": "integer", "minimum": 1},
     "shards": {
-      "type": "array",
-      "minItems": 1,
+      "type": "array", "minItems": 1,
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["index", "path", "plan_count", "plan_ids"],
+        "type": "object", "additionalProperties": false,
+        "required": ["index", "path", "plan_count", "plan_ids", "requirements"],
         "properties": {
           "index": {"type": "integer", "minimum": 1},
           "path": {"type": "string", "pattern": "^shards/shard-[0-9]{4}\\.json$"},
           "plan_count": {"type": "integer", "minimum": 1},
-          "plan_ids": {
-            "type": "array",
-            "minItems": 1,
-            "items": {"type": "string", "minLength": 1}
-          }
+          "plan_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "requirements": {"$ref": "#/$defs/shardRequirements"}
         }
+      }
+    }
+  },
+  "$defs": {
+    "shardRequirements": {
+      "type": "object", "additionalProperties": false,
+      "required": ["resource_weight", "max_accelerator_count", "accelerator_types", "runtime_families", "execution_compatibility"],
+      "properties": {
+        "resource_weight": {"type": "integer", "minimum": 1},
+        "max_accelerator_count": {"type": "integer", "minimum": 0},
+        "accelerator_types": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "runtime_families": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "execution_compatibility": {"$ref": "#/$defs/executionCompatibility"}
+      }
+    },
+    "executionCompatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accelerator_type", "runtime_family", "backend_adapter", "management_mode", "evaluator_adapter", "backend_environment", "evaluator_environment"],
+      "properties": {
+        "accelerator_type": {"type": "string", "minLength": 1},
+        "runtime_family": {"type": "string", "minLength": 1},
+        "backend_adapter": {"type": "string", "minLength": 1},
+        "management_mode": {"type": "string", "minLength": 1},
+        "evaluator_adapter": {"type": "string", "minLength": 1},
+        "backend_environment": {"type": "string", "minLength": 1},
+        "evaluator_environment": {"type": "string", "minLength": 1}
       }
     }
   }

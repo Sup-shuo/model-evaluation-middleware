@@ -116,7 +116,8 @@ class EvalScopeAdapterTests(unittest.TestCase):
                             "eval_batch_size": 4,
                             "limit": 5,
                             "seed": 7,
-                        }
+                        },
+                        "execution": {"mode": "smoke", "sample_limit": 1},
                     },
                     "cache_root": str(root / "cache"),
                     "output_root": str(root / "output"),
@@ -129,7 +130,7 @@ class EvalScopeAdapterTests(unittest.TestCase):
             self.assertEqual(argv[:2], ["evalscope", "eval"])
             self.assertEqual(argv[argv.index("--api-url") + 1], "http://127.0.0.1:8091/v1")
             self.assertEqual(argv[argv.index("--datasets") + 1], "fixture_eval")
-            self.assertEqual(argv[argv.index("--limit") + 1], "5")
+            self.assertEqual(argv[argv.index("--limit") + 1], "1")
             self.assertIn("--no-timestamp", argv)
             self.assertNotIn("vllm", argv)
             self.assertEqual(plan["raw_result_root"], str((root / "output").resolve()))

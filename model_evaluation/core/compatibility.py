@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from model_evaluation.core.errors import CompatibilityError
+from model_evaluation.core.capability_vocabulary import pair_diagnostic, requirement_diagnostic
 
 @dataclass(frozen=True)
 class CompatibilityReport:
     compatible: bool
     reasons: list[str]
     optional_misses: list[str]
+    diagnostics: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def status(self) -> str:
@@ -56,6 +58,7 @@ def _compare(actual: Any, op: str, expected: Any) -> bool:
 def evaluate(requirement_set: dict, facts: dict[str, Any]) -> CompatibilityReport:
     reasons: list[str] = []
     optional: list[str] = []
+    diagnostics: list[dict[str, Any]] = []
     for req in requirement_set.get("requirements", []):
         path = req["path"]
         actual = facts.get(path)
@@ -63,11 +66,12 @@ def evaluate(requirement_set: dict, facts: dict[str, Any]) -> CompatibilityRepor
         if ok:
             continue
         msg = req.get("message") or f"requirement failed: {path} {req['op']} {req.get('value')!r}; actual={actual!r}"
+        diagnostics.append(requirement_diagnostic(req, actual=actual, message=msg))
         if req.get("optional"):
             optional.append(msg)
         else:
             reasons.append(msg)
-    return CompatibilityReport(not reasons, reasons, optional)
+    return CompatibilityReport(not reasons, reasons, optional, diagnostics)
 
 
 def merge_fact_sets(*sets: dict[str, Any]) -> dict[str, Any]:
@@ -150,9 +154,31 @@ def device_runtime_compatibility(device: dict, runtime: dict) -> CompatibilityRe
     vendor = device.get("vendor")
     allowed = (runtime.get("capabilities", {}).get("values", {}) or {}).get("runtime.compatible_device_vendors")
     if allowed is None:
-        return CompatibilityReport(True, [], ["runtime did not declare compatible device vendors"])
+        message = "runtime did not declare compatible device vendors"
+        return CompatibilityReport(True, [], [message], [pair_diagnostic(
+            code="CAPABILITY_DECLARATION_MISSING",
+            path="runtime.compatible_device_vendors",
+            expected="declared vendor list",
+            actual=None,
+            message=message,
+            severity="warning",
+        )])
     if not isinstance(allowed, list):
-        return CompatibilityReport(False, ["runtime.compatible_device_vendors must be an array"], [])
+        message = "runtime.compatible_device_vendors must be an array"
+        return CompatibilityReport(False, [message], [], [pair_diagnostic(
+            code="CAPABILITY_DECLARATION_INVALID",
+            path="runtime.compatible_device_vendors",
+            expected="array",
+            actual=allowed,
+            message=message,
+        )])
     if vendor not in allowed:
-        return CompatibilityReport(False, [f"device/runtime mismatch: vendor={vendor!r} not in runtime compatible vendors {allowed!r}"], [])
+        message = f"device/runtime mismatch: vendor={vendor!r} not in runtime compatible vendors {allowed!r}"
+        return CompatibilityReport(False, [message], [], [pair_diagnostic(
+            code="CAPABILITY_PAIR_MISMATCH",
+            path="device.vendor",
+            expected=allowed,
+            actual=vendor,
+            message=message,
+        )])
     return CompatibilityReport(True, [], [])

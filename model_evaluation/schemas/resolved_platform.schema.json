@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "resolved_platform.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["evaluation_environment"],
+  "properties": {
+    "device": {"$ref": "device_descriptor.schema.json"},
+    "runtime": {"$ref": "runtime_descriptor.schema.json"},
+    "backend_environment": {"$ref": "environment_descriptor.schema.json"},
+    "evaluation_environment": {"$ref": "environment_descriptor.schema.json"},
+    "device_env_patch": {"$ref": "env_patch.schema.json"},
+    "runtime_env_patch": {"$ref": "env_patch.schema.json"},
+    "device_probe_skipped": {"const": true},
+    "runtime_probe_skipped": {"const": true},
+    "reason": {"type": "string", "minLength": 1}
+  },
+  "oneOf": [
+    {
+      "required": [
+        "device",
+        "runtime",
+        "backend_environment",
+        "device_env_patch",
+        "runtime_env_patch"
+      ],
+      "not": {
+        "anyOf": [
+          {"required": ["device_probe_skipped"]},
+          {"required": ["runtime_probe_skipped"]},
+          {"required": ["reason"]}
+        ]
+      }
+    },
+    {
+      "required": ["device_probe_skipped", "runtime_probe_skipped", "reason"],
+      "not": {
+        "anyOf": [
+          {"required": ["device"]},
+          {"required": ["runtime"]},
+          {"required": ["backend_environment"]},
+          {"required": ["device_env_patch"]},
+          {"required": ["runtime_env_patch"]}
+        ]
+      }
+    }
+  ]
+}

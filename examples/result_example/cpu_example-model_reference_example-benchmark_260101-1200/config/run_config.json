@@ -1,35 +1,93 @@
 {
   "schema_version": "1.0",
   "run_id": "cpu_example-model_reference_example-benchmark_260101-1200",
-  "system": {
-    "id": "example-cpu"
+  "plan_id": "plan-aaaaaaaaaaaaaaaaaaaaaaaa",
+  "started_at": "2026-01-01T12:00:00+08:00",
+  "timezone": "Asia/Shanghai",
+  "adapters": [
+    {"kind": "device", "name": "cpu", "version": "1.0.0"},
+    {"kind": "runtime", "name": "cpu", "version": "1.0.0"},
+    {"kind": "environment", "name": "current", "version": "1.0.0"},
+    {"kind": "backend", "name": "reference", "version": "1.0.0"},
+    {"kind": "dataset", "name": "virtual", "version": "1.0.0"},
+    {"kind": "binding", "name": "reference_eval", "version": "1.0.0"},
+    {"kind": "evaluator", "name": "reference_eval", "version": "1.0.0"}
+  ],
+  "selection": {
+    "schema_version": "1.0",
+    "model": "example-model",
+    "platform": "example-cpu",
+    "deployment": "reference",
+    "benchmark": "example-benchmark",
+    "evaluation": "reference-evaluation"
   },
   "model": {
+    "schema_version": "1.0",
     "id": "example-model",
-    "source": {
-      "type": "local",
-      "ref": "example/example-model"
-    }
+    "experiment_id": "example-model",
+    "source": {"type": "local", "ref": "/opt/models/example-model"}
   },
-  "evaluation": {
+  "benchmark": {
+    "schema_version": "1.0",
     "id": "example-benchmark",
-    "seeds": {
-      "random": 1234,
-      "numpy": 1234,
-      "framework": 1234
-    }
+    "dataset": {"provider": "virtual", "revision": "example-v1"},
+    "protocol": {},
+    "metrics": ["accuracy"]
   },
   "backend": {
-    "adapter": "reference",
-    "parameters": {
-      "executable": "reference-backend",
-      "port": 8091
-    },
-    "model_location": {
-      "local_path": "/opt/models/example-model"
-    }
+    "schema_version": "1.1",
+    "id": "reference",
+    "backend": {"adapter": "reference"},
+    "management": {"mode": "managed"},
+    "compatibility": {"runtime_families": ["cpu"]},
+    "model_location": {"local_path": "/opt/models/example-model"},
+    "parameters": {"port": 8091}
   },
   "evaluator": {
-    "adapter": "reference_eval"
+    "schema_version": "1.1",
+    "id": "reference-evaluation",
+    "framework": {"adapter": "reference_eval"},
+    "binding": {"adapter": "reference_eval"}
+  },
+  "system": {
+    "schema_version": "1.1",
+    "id": "example-cpu",
+    "device": {"adapter": "cpu", "devices": ["0"]},
+    "runtime": {"adapter": "cpu"},
+    "backend_environment": {"provider": "current", "profile": "current"},
+    "evaluation_environment": {"provider": "current", "profile": "current"},
+    "metadata": {"timezone": "Asia/Shanghai"}
+  },
+  "resolved_runtime": {
+    "device": {
+      "schema_version": "1.0",
+      "vendor": "cpu",
+      "device_type": "cpu",
+      "devices": [{"id": "0", "name": "Example CPU"}],
+      "capabilities": {"schema_version": "1.0", "values": {"device.multi_device": false}}
+    },
+    "runtime": {
+      "schema_version": "1.0",
+      "family": "cpu",
+      "version": "generic",
+      "available": true,
+      "capabilities": {"schema_version": "1.0", "values": {"runtime.compatible_device_vendors": ["cpu"]}}
+    },
+    "backend_environment": {
+      "schema_version": "1.0",
+      "provider": "current",
+      "identity": "example-controller",
+      "python": "/usr/bin/python3",
+      "capabilities": {"schema_version": "1.0", "values": {}}
+    },
+    "evaluation_environment": {
+      "schema_version": "1.0",
+      "provider": "current",
+      "identity": "example-controller",
+      "python": "/usr/bin/python3",
+      "capabilities": {"schema_version": "1.0", "values": {}}
+    },
+    "device_env_patch": {},
+    "runtime_env_patch": {}
   }
 }

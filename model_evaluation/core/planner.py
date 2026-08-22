@@ -21,8 +21,7 @@ from model_evaluation.core.errors import ConfigError
 from model_evaluation.core.provenance import assess_model_provenance
 from model_evaluation.core.registry.adapter_registry import AdapterRegistry
 from model_evaluation.core.schema.validator import SchemaStore
-
-STAGES=["PLATFORM_READY","DATA_READY","TASK_READY","EVALUATOR_PREFLIGHT","SERVICE_STARTING","SERVICE_READY","EVALUATING","NORMALIZING","CLEANING"]
+from model_evaluation.core.execution_plan import EXECUTION_STAGES, validate_execution_plan
 
 class Planner:
     def __init__(self, *, project_root: str | Path, schemas: SchemaStore, specs: SpecRepository, registry: AdapterRegistry):
@@ -108,7 +107,7 @@ class Planner:
             'deferred_checks':['service_capabilities','evaluator_environment_capabilities'],
             'model_source':model_source,
         }
-        facts: dict[str,Any]={}; reasons=[]; optional=[]
+        facts: dict[str,Any]={}; reasons=[]; optional=[]; diagnostics=[]
         resources=[
             {'kind':'run_lock','id':'global-orchestrator','exclusive':True},
             {'kind':'workspace','id':'run-workspace','exclusive':True},
@@ -124,7 +123,8 @@ class Planner:
             backend_env=invoke_cached(clients['backend_env'],'resolve',{'profile':platform['backend_environment']['profile'],'parameters':adapter_parameters(platform,'backend_environment')},context=ctx,timeout=4)
             resolved['platform']={'device':device,'runtime':runtime,'backend_environment':backend_env,'device_env_patch':visibility,'runtime_env_patch':runtime_patch}
             facts=merge_fact_sets(facts_from_device(device),facts_from_runtime(runtime),facts_from_environment(backend_env,'backend_environment'))
-            pair=device_runtime_compatibility(device,runtime); reasons.extend(pair.reasons); optional.extend(pair.optional_misses)
+            pair=device_runtime_compatibility(device,runtime)
+            reasons.extend(pair.reasons); optional.extend(pair.optional_misses); diagnostics.extend(pair.diagnostics)
             deployment_compatibility={
                 'schema_version':'1.0',
                 'requirements':[{'path':'runtime.family','op':'in','value':list(deployment['compatibility']['runtime_families']),
@@ -133,7 +133,7 @@ class Planner:
             self.schemas.validate('requirement_set',deployment_compatibility)
             resolved['deployment_compatibility_requirements']=deployment_compatibility
             compatibility_report=evaluate(deployment_compatibility,facts)
-            reasons.extend(compatibility_report.reasons); optional.extend(compatibility_report.optional_misses)
+            reasons.extend(compatibility_report.reasons); optional.extend(compatibility_report.optional_misses); diagnostics.extend(compatibility_report.diagnostics)
             for did in [d['id'] for d in device['devices']]: resources.append({'kind':'device','id':f"{device['vendor']}:{did}",'exclusive':True,'metadata':{'vendor':device['vendor'],'device_id':str(did)}})
             params=deployment.get('parameters') or {}; endpoint=deployment.get('endpoint') or {}; port_value=endpoint.get('port') if endpoint.get('port') is not None else params.get('port')
             if port_value is None: raise ConfigError(f"managed deployment {deployment['id']} must declare endpoint.port or parameters.port; Core does not assume backend-specific ports")
@@ -147,13 +147,15 @@ class Planner:
         evaluation_env=invoke_cached(clients['evaluation_env'],'resolve',{'profile':platform['evaluation_environment']['profile'],'parameters':adapter_parameters(platform,'evaluation_environment')},context=ctx,timeout=4)
         resolved['platform']['evaluation_environment']=evaluation_env
         facts=merge_fact_sets(facts,facts_from_environment(evaluation_env,'evaluation_environment'))
-        report=evaluate(backend_reqs,facts); reasons.extend(report.reasons); optional.extend(report.optional_misses)
+        report=evaluate(backend_reqs,facts)
+        reasons.extend(report.reasons); optional.extend(report.optional_misses); diagnostics.extend(report.diagnostics)
         resolved['dataset_resolution']=invoke_cached(clients['dataset'],'resolve',{'benchmark':benchmark},context=ctx,timeout=3)
         dataset_lock_id='dataset:'+benchmark['dataset']['provider']+':'+stable_id(resolved['dataset_resolution'],length=24)
         resources.append({'kind':'cache_lock','id':dataset_lock_id,'exclusive':True,'metadata':{'provider':benchmark['dataset']['provider'],'dataset_id':resolved['dataset_resolution'].get('dataset_id'),'revision':resolved['dataset_resolution'].get('revision')}})
         bind_req=invoke_cached(clients['binding'],'requirements',{'benchmark':benchmark},context=ctx,timeout=3)
         resolved['binding_requirements']=bind_req
-        bind_report=evaluate(bind_req,facts); reasons.extend(bind_report.reasons); optional.extend(bind_report.optional_misses)
+        bind_report=evaluate(bind_req,facts)
+        reasons.extend(bind_report.reasons); optional.extend(bind_report.optional_misses); diagnostics.extend(bind_report.diagnostics)
         unique={}
         for client in clients.values():
             ident=client.identity; unique[(ident.kind,ident.name)]={'kind':ident.kind,'name':ident.name,'version':ident.version}
@@ -161,7 +163,8 @@ class Planner:
         if reasons: status='incompatible'
         else: status='unknown'; reasons=['service/evaluator capability checks are deferred until SERVICE_READY']
         if optional: resolved['planning_optional_misses']=optional
-        plan={'schema_version':'1.0','plan_id':'plan-pending','run_spec':run_spec,'adapters':adapters,'compatibility':{'status':status,'reasons':reasons},'resources':resources,'stages':STAGES,'resolved':resolved,'protocol_fingerprints':{},'warnings':plan_warnings}
+        if diagnostics: resolved['compatibility_diagnostics']=diagnostics
+        plan={'schema_version':'1.0','plan_id':'plan-pending','run_spec':run_spec,'adapters':adapters,'compatibility':{'status':status,'reasons':reasons,'diagnostics':diagnostics},'resources':resources,'stages':list(EXECUTION_STAGES),'resolved':resolved,'protocol_fingerprints':{},'warnings':plan_warnings}
         plan['plan_id']='plan-'+stable_id(plan,length=24,exclude_keys={'plan_id'})
-        self.schemas.validate('execution_plan',plan)
+        validate_execution_plan(plan,self.schemas)
         return plan

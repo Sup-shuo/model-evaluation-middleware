@@ -119,6 +119,8 @@ def plan_evaluate(i, c):
     task = i["task"]
     evaluation = i["evaluation"]
     params = _parameters(evaluation)
+    execution = evaluation.get("execution") or {}
+    sample_limit = execution.get("sample_limit", params.get("limit"))
     auth = service.get("auth") or {"mode": "none"}
     if auth.get("mode") != "none":
         raise AdapterError(
@@ -164,8 +166,8 @@ def plan_evaluate(i, c):
         "--generation-config",
         json.dumps(_generation_config(params), separators=(",", ":"), sort_keys=True),
     ]
-    if params.get("limit") is not None:
-        argv += ["--limit", str(params["limit"])]
+    if sample_limit is not None:
+        argv += ["--limit", str(sample_limit)]
     dataset_args = (task.get("metadata") or {}).get("evalscope_dataset_args")
     if dataset_args:
         argv += [

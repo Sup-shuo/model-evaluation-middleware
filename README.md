@@ -15,6 +15,9 @@ consistent result product.
 |---|---|
 | Install the project and finish a first real run | [Installation and first evaluation](docs/installation.md) |
 | Understand System, Model, and Evaluation files | [Configuration overview](docs/configuration.md) |
+| Find a command | [CLI reference](docs/cli-reference.md) |
+| Run local or scheduler-exported matrices | [Matrix execution lifecycle](docs/matrix-execution.md) |
+| List, validate, or migrate a configuration catalog | [Configuration management](docs/configuration/management.md) |
 | Configure hardware, inference, evaluation, or datasets | [Components and integrations](docs/components/index.md) |
 | Register text, quantized, multimodal, or derived models | [Model guide](docs/models/index.md) |
 | Inspect built-in support and validation status | [Compatibility matrix](docs/compatibility.md) |
@@ -128,7 +131,7 @@ benchmark, execution, and result inspection.
 config/
 ├── systems/                 # Machine profiles
 ├── models/                  # Model catalog; may be grouped by provider/family
-├── evaluations/             # Smoke, full, and one-off selections
+├── evaluations/             # Benchmark and one-off selections
 ├── system.yaml              # Generic init template
 └── evaluation.yaml          # Generic init template
 ```
@@ -143,14 +146,14 @@ See [configuration precedence](docs/configuration.md#selection-and-precedence).
 
 ```bash
 # Explain configuration or resource failures without starting the service
-./eval-manager explain --system-config nvidia --evaluation-config smoke_bbh_08b
+./eval-manager explain --system-config config/system.yaml --evaluation-config config/evaluation.yaml --smoke
 
 # Preview and save the resolved execution plan
-./eval-manager plan --system-config nvidia --evaluation-config smoke_bbh_08b \
+./eval-manager plan --system-config config/system.yaml --evaluation-config config/evaluation.yaml --smoke \
   -o /tmp/plan.json
 
 # Execute and save optional TXT/SVG projections
-./eval-manager run --system-config nvidia --evaluation-config smoke_bbh_08b \
+./eval-manager run --system-config config/system.yaml --evaluation-config config/evaluation.yaml --smoke \
   --render-summary
 
 # Validate and inspect the final result product
@@ -158,12 +161,31 @@ See [configuration precedence](docs/configuration.md#selection-and-precedence).
 ./eval-manager inspect results/<run-id>
 ```
 
-`check` combines validation, Doctor, plan preview, and read-only resource
-checks. `validate`, `doctor`, `plan`, and `explain` remain available separately.
+`--smoke` temporarily limits the selected Evaluation to one sample per task; it
+does not modify YAML and must not be reported as a full benchmark. Omit it for
+the full run. `check` combines validation, Doctor, plan preview, and read-only
+resource checks. `validate`, `doctor`, `plan`, and `explain` remain available
+separately.
+
+Manage a growing configuration catalog without starting a Backend:
+
+```bash
+eval-manager config list
+eval-manager config check
+eval-manager config show evaluation teams/bbh
+eval-manager config migrate                    # dry-run
+```
 
 For large matrices, export child plans for Slurm, Kubernetes, Ray, or an
 internal scheduler. Core intentionally remains a single-host serial executor
-with resource locks.
+with resource locks. Export protocol 1.1 adds logical scheduler jobs without
+physical device IDs, separates incompatible execution stacks, and balances
+each compatibility group by declared accelerator count:
+
+```bash
+eval-manager matrix-export /tmp/matrix-plan.json \
+  -o /tmp/matrix-jobs --shards 8 --strategy resource_balanced
+```
 
 ## Result product
 
@@ -235,6 +257,8 @@ model-evaluation-middleware/
 - [Documentation index](docs/index.md)
 - [Installation and first evaluation](docs/installation.md)
 - [Configuration overview](docs/configuration.md)
+- [CLI reference](docs/cli-reference.md)
+- [Matrix execution lifecycle](docs/matrix-execution.md)
 - [Components and integrations](docs/components/index.md)
 - [Model guide](docs/models/index.md)
 - [Adapter guide](docs/adapters/index.md)

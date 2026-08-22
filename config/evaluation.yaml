@@ -17,7 +17,6 @@ evaluator:
   parameters:
     batch_size: 1
     num_concurrent: 1
-    limit: 1
     log_samples: true
     random_seed: 0
     numpy_random_seed: 1234

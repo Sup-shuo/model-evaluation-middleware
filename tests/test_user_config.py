@@ -259,6 +259,34 @@ class UserConfigTests(unittest.TestCase):
             self.assertEqual(deployment["compatibility"]["runtime_families"], ["cpu"])
             self.assertNotIn("runtime_families", deployment.get("parameters", {}))
 
+    def test_smoke_mode_is_transient_and_frozen_in_evaluation_spec(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td).resolve()
+            system, evaluation = self._managed_vllm_docs(
+                root, runtime="cpu", compatibility=["cpu"]
+            )
+            system_path, evaluation_path = self._write_docs(root, system, evaluation)
+            app = Application(PACKAGE_ROOT, ROOT)
+
+            standard = app.user_config.load(system_path, evaluation_path)
+            smoke = app.user_config.load(system_path, evaluation_path, smoke=True)
+            standard_spec = standard.specs.resolve(
+                "evaluation", standard.generated["evaluation_id"]
+            )
+            smoke_spec = smoke.specs.resolve(
+                "evaluation", smoke.generated["evaluation_id"]
+            )
+
+            self.assertNotIn("execution", standard_spec)
+            self.assertEqual(
+                smoke_spec["execution"],
+                {"mode": "smoke", "sample_limit": 1},
+            )
+            self.assertNotIn("execution", smoke.evaluation)
+            self.assertNotIn("smoke", standard.matrix_spec["tags"])
+            self.assertIn("smoke", smoke.matrix_spec["tags"])
+            self.assertEqual(smoke.generated["run_mode"], "smoke")
+
     def test_unspecified_devices_are_not_defaulted_to_zero(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td).resolve()

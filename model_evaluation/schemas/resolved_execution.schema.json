@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "resolved_execution.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "specs",
+    "source_deployment_spec",
+    "deployment_resolution",
+    "source_evaluation_spec",
+    "evaluation_resolution",
+    "management_mode",
+    "binding_adapter",
+    "deferred_checks",
+    "model_source",
+    "backend_requirements",
+    "platform",
+    "dataset_resolution",
+    "binding_requirements"
+  ],
+  "properties": {
+    "specs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run", "model", "platform", "deployment", "benchmark", "evaluation"],
+      "properties": {
+        "run": {"$ref": "run_spec.schema.json"},
+        "model": {"$ref": "model_spec.schema.json"},
+        "platform": {"$ref": "platform_profile.schema.json"},
+        "deployment": {"$ref": "deployment_profile.schema.json"},
+        "benchmark": {"$ref": "benchmark_spec.schema.json"},
+        "evaluation": {"$ref": "evaluation_profile.schema.json"}
+      }
+    },
+    "source_deployment_spec": {"$ref": "deployment_profile.schema.json"},
+    "deployment_resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "override_applied"],
+      "properties": {
+        "mode": {"enum": ["none", "explicit", "template", "model_source"]},
+        "override_applied": {"type": "boolean"},
+        "path_template": {"type": "string"},
+        "root": {"type": ["string", "null"]},
+        "root_template": {"type": ["string", "null"]},
+        "resolved_local_path": {"type": "string", "minLength": 1},
+        "tokenizer_template": {"type": "string"},
+        "tokenizer_ref": {"type": "string"},
+        "resolved_tokenizer_path": {"type": "string", "minLength": 1}
+      }
+    },
+    "source_evaluation_spec": {"$ref": "evaluation_profile.schema.json"},
+    "evaluation_resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["parameter_templates_removed"],
+      "properties": {
+        "parameter_templates_removed": {"const": true}
+      }
+    },
+    "management_mode": {"enum": ["managed", "attached", "external"]},
+    "binding_adapter": {"$ref": "common.schema.json#/$defs/id"},
+    "deferred_checks": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "model_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy",
+        "source_type",
+        "source_ref",
+        "source_revision",
+        "revision_stable",
+        "management_mode",
+        "local_materialization",
+        "recording"
+      ],
+      "properties": {
+        "policy": {"enum": ["migration", "pinned"]},
+        "source_type": {"type": "string", "minLength": 1},
+        "source_ref": {"type": "string"},
+        "source_revision": {"type": ["string", "null"]},
+        "revision_stable": {"type": "boolean"},
+        "management_mode": {"enum": ["managed", "attached", "external"]},
+        "local_materialization": {"type": "boolean"},
+        "recording": {
+          "enum": ["remote_endpoint", "local_path", "declared_revision", "declared_source"]
+        }
+      }
+    },
+    "backend_requirements": {"$ref": "requirement_set.schema.json"},
+    "platform": {"$ref": "resolved_platform.schema.json"},
+    "deployment_compatibility_requirements": {"$ref": "requirement_set.schema.json"},
+    "endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host", "port"],
+      "properties": {
+        "host": {"type": "string", "minLength": 1},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535}
+      }
+    },
+    "dataset_resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dataset_id", "revision"],
+      "properties": {
+        "dataset_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1},
+        "source": {"type": "string"},
+        "root": {"type": ["string", "null"]},
+        "mode": {"type": "string"},
+        "integrity_policy": {"type": "string"},
+        "expected_manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "binding_requirements": {"$ref": "requirement_set.schema.json"},
+    "planning_optional_misses": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "compatibility_diagnostics": {
+      "type": "array",
+      "items": {"$ref": "capability_diagnostic.schema.json"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"management_mode": {"const": "managed"}}},
+      "then": {"required": ["deployment_compatibility_requirements", "endpoint"]},
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["deployment_compatibility_requirements"]},
+            {"required": ["endpoint"]}
+          ]
+        }
+      }
+    }
+  ]
+}

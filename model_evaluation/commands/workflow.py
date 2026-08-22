@@ -143,6 +143,7 @@ def build_check_report(
     *,
     system_config: str | None,
     evaluation_config: str | None,
+    smoke: bool = False,
 ) -> dict:
     report = {
         "schema_version": "1.0",
@@ -153,7 +154,11 @@ def build_check_report(
         "explanations": [],
     }
     try:
-        bundle = app.load_user_config(system_config, evaluation_config)
+        bundle = app.load_user_config(
+            system_config,
+            evaluation_config,
+            smoke=smoke,
+        )
         report["system"] = bundle.system["system"]["name"]
         report["phases"]["validation"] = {
             "status": "ok",
@@ -223,11 +228,13 @@ def run_check(
     evaluation_config: str | None,
     output_format: str,
     explain: bool = False,
+    smoke: bool = False,
 ) -> bool:
     report = build_check_report(
         app,
         system_config=system_config,
         evaluation_config=evaluation_config,
+        smoke=smoke,
     )
     if output_format == "json":
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))

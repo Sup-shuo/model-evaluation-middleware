@@ -12,11 +12,19 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from model_evaluation.core.matrix import MatrixExecutor
+from model_evaluation.core.batch_product import inspect_batch_product
+from model_evaluation.core.errors import ResultProductError
+from model_evaluation.core.matrix_config import MatrixSchemas
 from model_evaluation.core.result_relocation import ResultRelocationMap, load_result_relocation
 from model_evaluation.core.schema.validator import SchemaStore
+from tests.test_result_protocol import _write_reproduction_records
 
 
-def _plan(*, plan_id: str = "plan-1", timezone_name: str | None = None) -> dict:
+PLAN_ID = "plan-" + "1" * 24
+MATRIX_ID = "matrix-" + "1" * 24
+
+
+def _plan(*, plan_id: str = PLAN_ID, timezone_name: str | None = None) -> dict:
     metadata = {} if timezone_name is None else {"timezone": timezone_name}
     return {
         "plan_id": plan_id,
@@ -119,7 +127,15 @@ def _write_product(run_dir: Path) -> None:
     _write_json(run_dir / "result.json", result)
     _write_json(run_dir / "metrics.json", _metrics(result))
     _write_json(run_dir / "terminal.json", _terminal(run_dir.name))
-    _write_json(run_dir / "config" / "run_config.json", {"plan_id": "plan-1"})
+    _write_reproduction_records(
+        run_dir,
+        model="model-catalog-entry",
+        started_at="2026-01-01T08:00:00+08:00",
+    )
+    config_path = run_dir / "config" / "run_config.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["plan_id"] = PLAN_ID
+    _write_json(config_path, config)
     _write_json(run_dir / "raw" / "framework_result.json", {})
 
 
@@ -127,7 +143,10 @@ def _executor(results_root: Path) -> MatrixExecutor:
     executor = object.__new__(MatrixExecutor)
     executor.results_root = results_root.resolve()
     executor.result_relocation = ResultRelocationMap(executor.results_root)
-    executor.app = SimpleNamespace(schemas=SchemaStore(ROOT / "model_evaluation" / "schemas"))
+    executor.app = SimpleNamespace(
+        schemas=SchemaStore(ROOT / "model_evaluation" / "schemas"),
+        matrix_schemas=MatrixSchemas(ROOT / "model_evaluation" / "schemas" / "user"),
+    )
     return executor
 
 
@@ -175,7 +194,7 @@ class BatchProductTests(unittest.TestCase):
             old_run = old_root / run_dir.name
             _write_json(run_dir / "canonical_result.json", _result(run_dir.name))
             _write_json(run_dir / "terminal_record.json", {"outcome": "success"})
-            _write_json(run_dir / "config" / "execution_plan.json", {"plan_id": "plan-1"})
+            _write_json(run_dir / "config" / "execution_plan.json", {"plan_id": PLAN_ID})
             _write_json(
                 current / "RELOCATION.json",
                 {"schema_version": "1.0", "mappings": [{"old_root": str(old_root), "new_root": str(current)}]},
@@ -212,11 +231,11 @@ class BatchProductTests(unittest.TestCase):
             batch_dir.mkdir(parents=True)
             _write_product(run_dir)
             plan = _plan()
-            matrix_plan = {"matrix_id": "matrix-1", "plans": [plan]}
+            matrix_plan = {"matrix_id": MATRIX_ID, "plans": [plan]}
             status = {
-                "plan-1": {
+                PLAN_ID: {
                     "index": 1,
-                    "plan_id": "plan-1",
+                    "plan_id": PLAN_ID,
                     "model_id": "model-experiment-id",
                     "model_label": "Model Label",
                     "model_ref": "Org/Model",
@@ -231,7 +250,8 @@ class BatchProductTests(unittest.TestCase):
                 }
             }
 
-            summary = _executor(root)._finalize_batch(
+            executor = _executor(root)
+            summary = executor._finalize_batch(
                 batch_dir, matrix_plan, status, hard_stop=False, keep_going=False
             )
 
@@ -243,6 +263,23 @@ class BatchProductTests(unittest.TestCase):
             runs = json.loads((batch_dir / "runs.json").read_text(encoding="utf-8"))
             groups = (batch_dir / "group_metrics.tsv").read_text(encoding="utf-8")
             tasks = (batch_dir / "task_metrics.tsv").read_text(encoding="utf-8")
+            report = inspect_batch_product(
+                batch_dir,
+                matrix_schemas=executor.app.matrix_schemas,
+                run_schemas=executor.app.schemas,
+            )
+            self.assertEqual(report["checked_runs"], 1)
+            for name in ("metrics.tsv", "group_metrics.tsv", "task_metrics.tsv"):
+                table = batch_dir / name
+                original = table.read_text(encoding="utf-8")
+                table.write_text(original + "unexpected-row\n", encoding="utf-8")
+                with self.assertRaisesRegex(ResultProductError, "contents disagree"):
+                    inspect_batch_product(
+                        batch_dir,
+                        matrix_schemas=executor.app.matrix_schemas,
+                        run_schemas=executor.app.schemas,
+                    )
+                table.write_text(original, encoding="utf-8")
 
         self.assertEqual(summary["outcome"], "success")
         self.assertEqual(runs[0]["result_path"], str(run_dir / "result.json"))

@@ -13,6 +13,9 @@
 |---|---|
 | 安装项目并完成第一次真实评测 | [安装与第一次评测](installation.md) |
 | 理解 System、Model、Evaluation 三类配置 | [配置总览](configuration.md) |
+| 查找 CLI 命令 | [CLI 命令索引](cli-reference.md) |
+| 运行本地或外部调度 Matrix | [Matrix 完整执行链路](matrix-execution.md) |
+| 列出、检查或迁移配置目录 | [配置目录管理](configuration/management.md) |
 | 配置硬件、推理框架、评测框架或数据集 | [组件与集成](components/index.md) |
 | 登记文本、量化、多模态或派生模型 | [模型指南](models/index.md) |
 | 查看内置能力与实际验证状态 | [兼容性矩阵](compatibility.md) |
@@ -117,7 +120,7 @@ benchmark、执行与结果检查的完整流程。
 config/
 ├── systems/                 # 机器配置
 ├── models/                  # 模型目录，可按提供方/模型族分级
-├── evaluations/             # smoke、完整评测和一次性选择
+├── evaluations/             # benchmark 与一次性选择
 ├── system.yaml              # init 通用模板
 └── evaluation.yaml          # init 通用模板
 ```
@@ -130,14 +133,14 @@ Backend 与 Evaluator；System 硬件 profile 提供设备池，Evaluation 可�
 
 ```bash
 # 不启动服务，解释配置或资源为何不可运行
-./eval-manager explain --system-config nvidia --evaluation-config smoke_bbh_08b
+./eval-manager explain --system-config config/system.yaml --evaluation-config config/evaluation.yaml --smoke
 
 # 预览并保存执行计划
-./eval-manager plan --system-config nvidia --evaluation-config smoke_bbh_08b \
+./eval-manager plan --system-config config/system.yaml --evaluation-config config/evaluation.yaml --smoke \
   -o /tmp/plan.json
 
 # 执行并保存可选 TXT/SVG 投影
-./eval-manager run --system-config nvidia --evaluation-config smoke_bbh_08b \
+./eval-manager run --system-config config/system.yaml --evaluation-config config/evaluation.yaml --smoke \
   --render-summary
 
 # 验证并查看最终结果
@@ -145,11 +148,27 @@ Backend 与 Evaluator；System 硬件 profile 提供设备池，Evaluation 可�
 ./eval-manager inspect results/<run-id>
 ```
 
-`check` 组合 validate、Doctor、plan preview 和只读资源检查；也可以分别使用
-`validate`、`doctor`、`plan` 和 `explain`。
+`--smoke` 会临时把所选 Evaluation 限制为每个任务 1 个样本，不会修改 YAML，
+也不能作为完整测评分数。正式运行时去掉该开关。`check` 组合 validate、Doctor、
+plan preview 和只读资源检查；也可以分别使用 `validate`、`doctor`、`plan` 和 `explain`。
+
+配置目录可以独立检查，不会启动 Backend：
+
+```bash
+eval-manager config list
+eval-manager config check
+eval-manager config show evaluation teams/bbh
+eval-manager config migrate                    # 默认仅预览
+```
 
 大规模 Matrix 可以导出子计划交给 Slurm、Kubernetes、Ray 或内部调度器。Core 保持
-单机串行执行与资源锁，不扩张成分布式调度系统。
+单机串行执行与资源锁，不扩张成分布式调度系统。导出协议 1.1 额外生成不含物理卡号的
+逻辑 job 描述，先隔离不兼容的执行栈，再按声明的加速卡数量均衡分片：
+
+```bash
+eval-manager matrix-export /tmp/matrix-plan.json \
+  -o /tmp/matrix-jobs --shards 8 --strategy resource_balanced
+```
 
 ## 结果产品
 
@@ -219,6 +238,8 @@ model-evaluation-middleware/
 - [文档索引](index.md)
 - [安装与第一次评测](installation.md)
 - [配置总览](configuration.md)
+- [CLI 命令索引](cli-reference.md)
+- [Matrix 完整执行链路](matrix-execution.md)
 - [组件与集成](components/index.md)
 - [模型指南](models/index.md)
 - [Adapter 指南](adapters/index.md)

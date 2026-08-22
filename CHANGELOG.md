@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 4.1.0-rc1
 
 - Upgraded user System and Evaluation documents to schema 1.3: every run now
   selects Backend and Evaluator profiles explicitly.
@@ -8,6 +8,16 @@
   pool, including Adapter-owned tensor-parallel derivation and validation.
 - Updated onboarding, Mock, public examples, documentation, and tests for the
   new configuration contract.
+- Split configuration compilation, execution planning, run lifecycle, and
+  orchestration into focused Core modules with explicit resolved-object Schemas.
+- Added configuration catalog listing, checking, and preview-first migration,
+  plus smoke overlays that do not rewrite Evaluation YAML.
+- Added a canonical capability vocabulary and richer diagnostics shared by
+  planning, compatibility checks, and Adapter operation validation.
+- Extended Matrix exports with scheduler-neutral jobs, resource-balanced
+  sharding, resumable batch products, and dedicated inspection Schemas.
+- Added CLI, configuration-management, capability, Matrix lifecycle, and result
+  product documentation for the release-candidate surface.
 
 ## 4.1.0-alpha33
 

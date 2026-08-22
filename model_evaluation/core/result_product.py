@@ -8,6 +8,8 @@ from model_evaluation.core.serialization import json_loads_strict
 
 
 FINAL_PRODUCT_FILES = {
+    "run_config": "config/run_config.json",
+    "runtime_versions": "config/runtime_versions.json",
     "result": "result.json",
     "metrics": "metrics.json",
     "terminal": "terminal.json",
@@ -90,6 +92,31 @@ def inspect_run_product(run_dir: str | Path, schemas) -> dict:
     _same("terminal.run_id", terminal["run_id"], root.name)
 
     outcome = terminal["outcome"]
+    run_config = _load(root / FINAL_PRODUCT_FILES["run_config"])
+    schemas.validate("run_config", run_config)
+    _same("run_config.run_id", run_config["run_id"], terminal["run_id"])
+    _same("run_config.started_at", run_config["started_at"], terminal["started_at"])
+    _same("run_config.timezone", run_config["timezone"], terminal["timezone"])
+
+    runtime_path = root / FINAL_PRODUCT_FILES["runtime_versions"]
+    if outcome == "success" and not runtime_path.is_file():
+        raise ResultProductError(
+            "successful run must contain config/runtime_versions.json"
+        )
+    runtime_versions = _load(runtime_path) if runtime_path.is_file() else None
+    if runtime_versions is not None:
+        schemas.validate("runtime_versions", runtime_versions)
+        _same(
+            "runtime adapter inventory",
+            runtime_versions["adapters"],
+            run_config["adapters"],
+        )
+    if outcome == "success":
+        for component in ("backend", "evaluator"):
+            if component not in runtime_versions:
+                raise ResultProductError(
+                    f"successful run runtime_versions is missing {component}"
+                )
     failure_path = root / FINAL_PRODUCT_FILES["failure"]
     result_path = root / FINAL_PRODUCT_FILES["result"]
     metrics_path = root / FINAL_PRODUCT_FILES["metrics"]
@@ -124,6 +151,18 @@ def inspect_run_product(run_dir: str | Path, schemas) -> dict:
         for key in ("run_id", "model", "benchmark", "framework"):
             _same(key, result[key], metrics[key])
         _same("result.run_id", result["run_id"], terminal["run_id"])
+        configured_model = (
+            run_config["model"].get("experiment_id")
+            or (run_config["model"].get("metadata") or {}).get("experiment_id")
+            or run_config["model"]["id"]
+        )
+        _same("result.model", result["model"], configured_model)
+        _same("result.benchmark", result["benchmark"], run_config["benchmark"]["id"])
+        _same(
+            "result.framework",
+            result["framework"],
+            run_config["evaluator"]["framework"]["adapter"],
+        )
         _same("summary metrics", result["metrics"], metrics["summary"])
         breakdowns = result.get("breakdowns") or {}
         if breakdowns:
@@ -158,6 +197,7 @@ def inspect_run_product(run_dir: str | Path, schemas) -> dict:
         "schema_version": "1.0",
         "run_dir": str(root),
         "run_id": terminal["run_id"],
+        "plan_id": run_config["plan_id"],
         "outcome": outcome,
         "started_at": terminal["started_at"],
         "finished_at": terminal["finished_at"],
@@ -171,6 +211,7 @@ def inspect_run_product(run_dir: str | Path, schemas) -> dict:
         "tasks": len(metrics.get("tasks") or {}) if metrics else 0,
         "effective_samples": _effective_samples(metrics) if metrics else None,
         "artifacts": artifact_count,
+        "runtime_recorded": runtime_versions is not None,
         "failure_stage": failure.get("stage") if failure else None,
         "error": failure.get("primary_error") if failure else None,
     }

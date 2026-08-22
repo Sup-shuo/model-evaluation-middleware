@@ -1120,7 +1120,7 @@ overrides:
         self.assertEqual(proc['secret_env']['MODEL_EVAL_UPSTREAM_API_KEY'],'secret://env/MODEL_API_KEY')
         self.assertNotIn('OPENAI_API_KEY',proc.get('secret_env',{}))
 
-    def test_lm_eval_limit_is_explicit_adapter_owned_smoke_parameter(self):
+    def test_lm_eval_translates_standard_smoke_limit_and_overrides_legacy_limit(self):
         from unittest.mock import patch
         from model_evaluation.adapters.evaluator.lm_eval import impl as lm_eval_impl
         service={
@@ -1129,7 +1129,10 @@ overrides:
             'auth':{'mode':'none'},
         }
         task={'task_id':'mmlu_abstract_algebra','protocol_fingerprint':'p','execution':{'inference':['multiple_choice'],'num_fewshot':0}}
-        evaluation={'parameters':{'tool_root':'/unused','limit':1,'log_samples':False}}
+        evaluation={
+            'parameters':{'tool_root':'/unused','limit':9,'log_samples':False},
+            'execution':{'mode':'smoke','sample_limit':1},
+        }
         with patch.object(lm_eval_impl,'_framework_source',return_value=(Path('/tmp'),'rev',False)):
             out=lm_eval_impl.plan_evaluate({'service':service,'task':task,'evaluation':evaluation,'output_root':'/tmp/out','run_metadata':{}},{})
         argv=out['process']['argv']
@@ -2143,6 +2146,55 @@ server.serve_forever()
             self.assertTrue((run_dir/'raw'/'framework_result.json').is_file())
             self.assertFalse(list((root/'runtime'/'processes').glob('process-*.json')))
 
+    def test_terminal_publication_failure_does_not_commit_success(self):
+        from model_evaluation.core.run_finalization import atomic_json as real_atomic_json
+
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td).resolve()
+            with patch.dict(os.environ,{'MODEL_EVAL_RUNTIME_ROOT':str(root/'runtime')},clear=False):
+                app=Application(PACKAGE_ROOT, ROOT)
+                plan=self._managed_e2e_plan(app,root,wrong_model=False,port=18092)
+                orch=app.orchestrator(results_root=root/'results',cache_root=root/'cache')
+
+                def fail_terminal(path, value):
+                    if Path(path).name == 'terminal.json':
+                        raise OSError('terminal publication failed')
+                    return real_atomic_json(path, value)
+
+                with patch('model_evaluation.core.run_finalization.atomic_json',side_effect=fail_terminal):
+                    with self.assertRaisesRegex(ProcessError,'could not publish final result product'):
+                        orch.execute(plan)
+
+            run_dir=next(path for path in (root/'results').iterdir() if path.is_dir())
+            self.assertFalse((run_dir/'terminal.json').exists())
+            status=json_loads_strict((run_dir/'.run'/'status.json').read_text())
+            self.assertEqual(status['state'],'CLEANING')
+
+    def test_failure_publication_error_is_not_silently_finalized(self):
+        from model_evaluation.core.run_finalization import atomic_json as real_atomic_json
+
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td).resolve()
+            with patch.dict(os.environ,{'MODEL_EVAL_RUNTIME_ROOT':str(root/'runtime')},clear=False):
+                app=Application(PACKAGE_ROOT, ROOT)
+                plan=self._managed_e2e_plan(app,root,wrong_model=True,port=18093)
+                orch=app.orchestrator(results_root=root/'results',cache_root=root/'cache')
+
+                def fail_failure(path, value):
+                    if Path(path).name == 'failure.json':
+                        raise OSError('failure publication failed')
+                    return real_atomic_json(path, value)
+
+                with patch('model_evaluation.core.run_finalization.atomic_json',side_effect=fail_failure):
+                    with self.assertRaisesRegex(ProcessError,'could not publish final result product'):
+                        orch.execute(plan)
+
+            run_dir=next(path for path in (root/'results').iterdir() if path.is_dir())
+            self.assertFalse((run_dir/'failure.json').exists())
+            self.assertFalse((run_dir/'terminal.json').exists())
+            status=json_loads_strict((run_dir/'.run'/'status.json').read_text())
+            self.assertEqual(status['state'],'CLEANING')
+
     def test_initial_persistence_failure_still_publishes_terminal_product(self):
         from unittest.mock import patch
 
@@ -2151,7 +2203,6 @@ server.serve_forever()
             with patch.dict(os.environ,{'MODEL_EVAL_RUNTIME_ROOT':str(root/'runtime')},clear=False):
                 app=Application(PACKAGE_ROOT, ROOT)
                 plan=self._managed_e2e_plan(app,root,wrong_model=False,port=18091)
-                plan['resources']=[]
                 orch=app.orchestrator(results_root=root/'results',cache_root=root/'cache')
                 with patch.object(orch,'_persist_initial',side_effect=OSError('initial persistence failed')):
                     with self.assertRaisesRegex(OSError,'initial persistence failed'):

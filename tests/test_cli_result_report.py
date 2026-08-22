@@ -23,6 +23,12 @@ class CliResultReportTests(unittest.TestCase):
             with self.subTest(argv=argv):
                 self.assertTrue(parser.parse_args(argv).render_summary)
 
+    def test_smoke_flag_is_available_on_user_config_commands(self):
+        parser = build_parser()
+        for command in ("validate", "doctor", "check", "explain", "plan", "run"):
+            with self.subTest(command=command):
+                self.assertTrue(parser.parse_args([command, "--smoke"]).smoke)
+
     def test_batch_renderer_only_processes_successful_runs(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

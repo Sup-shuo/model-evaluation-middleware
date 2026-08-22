@@ -12,9 +12,10 @@ from model_evaluation.core.orchestrator import Orchestrator
 from model_evaluation.core.matrix import MatrixSchemas, MatrixRepository, MatrixPlanner, MatrixExecutor, verify_matrix_plan, finalize_matrix_plan
 from model_evaluation.core.serialization import json_loads_strict
 from model_evaluation.core.user_config import UserConfigResolver
-from model_evaluation.core.identifiers import stable_id
 from model_evaluation.core.errors import ConfigError
+from model_evaluation.core.execution_plan import validate_execution_plan
 from model_evaluation.core.matrix_export import export_execution_plans
+from model_evaluation.core.config.catalog import resolve_config_reference
 
 
 def _host_runtime_root() -> Path:
@@ -52,18 +53,19 @@ class Application:
         raw_value=value or os.environ.get(env_name)
         if raw_value is None:
             return self.project_root/'config'/legacy_name
-        raw=Path(raw_value).expanduser()
-        if raw.is_file() or raw.is_absolute() or raw.parent != Path('.') or raw.suffix:
-            return raw
-        candidates=[self.project_root/'config'/catalog_dir/f'{raw.name}.yaml',self.project_root/'config'/catalog_dir/f'{raw.name}.yml']
-        matches=[p for p in candidates if p.is_file()]
-        if len(matches)==1:
-            return matches[0]
-        if len(matches)>1:
-            raise ValueError(f'ambiguous user config id {raw.name!r} in config/{catalog_dir}')
-        return raw
+        return resolve_config_reference(
+            self.project_root,
+            raw_value,
+            catalog_dir=catalog_dir,
+        )
 
-    def load_user_config(self, system_path: str | Path | None = None, evaluation_path: str | Path | None = None):
+    def load_user_config(
+        self,
+        system_path: str | Path | None = None,
+        evaluation_path: str | Path | None = None,
+        *,
+        smoke: bool = False,
+    ):
         # Explicit CLI/API paths win.  Otherwise each machine may pin its own
         # system configuration through the process environment while reusing
         # the same evaluation file across machines.
@@ -76,10 +78,21 @@ class Application:
         return self.user_config.load(
             Path(system_value).expanduser(),
             Path(evaluation_value).expanduser(),
+            smoke=smoke,
         )
 
-    def user_matrix_plan(self, system_path: str | Path | None = None, evaluation_path: str | Path | None = None) -> tuple[dict, object]:
-        bundle=self.load_user_config(system_path,evaluation_path)
+    def user_matrix_plan(
+        self,
+        system_path: str | Path | None = None,
+        evaluation_path: str | Path | None = None,
+        *,
+        smoke: bool = False,
+    ) -> tuple[dict, object]:
+        bundle = self.load_user_config(
+            system_path,
+            evaluation_path,
+            smoke=smoke,
+        )
         return self.build_user_matrix_plan(bundle), bundle
 
     def build_user_matrix_plan(self, bundle) -> dict:
@@ -102,10 +115,7 @@ class Application:
 
     def load_plan(self, path: str | Path) -> dict:
         obj=json_loads_strict(Path(path).read_text(encoding='utf-8'))
-        self.schemas.validate('execution_plan',obj)
-        expected='plan-'+stable_id(obj,length=24,exclude_keys={'plan_id'})
-        if obj.get('plan_id') != expected:
-            raise ConfigError('plan_id does not match normalized execution plan')
+        validate_execution_plan(obj,self.schemas)
         return obj
 
 
@@ -120,13 +130,21 @@ class Application:
         verify_matrix_plan(obj,app=self)
         return obj
 
-    def export_matrix_plan(self, plan: dict, output_dir: str | Path, *, shards: int) -> dict:
+    def export_matrix_plan(
+        self,
+        plan: dict,
+        output_dir: str | Path,
+        *,
+        shards: int,
+        strategy: str = "round_robin",
+    ) -> dict:
         verify_matrix_plan(plan, app=self)
         return export_execution_plans(
             plan,
             output_dir,
             shards=shards,
             schemas=self.matrix_schemas,
+            strategy=strategy,
         )
 
     def matrix_executor(self, *, results_root: str | Path | None=None, cache_root: str | Path | None=None, secrets: dict[str,str] | None=None):

@@ -14,12 +14,14 @@ from model_evaluation.commands.doctor import (
 )
 from model_evaluation.commands.render import render_inspection
 from model_evaluation.commands.workflow import run_check
+from model_evaluation.commands.configuration import add_config_commands, handle_config_command
 from model_evaluation.core.app import Application
 from model_evaluation.core.config.deployment import resolve_deployment_profile
 from model_evaluation.core.config.evaluation import resolve_evaluation_profile
-from model_evaluation.core.errors import ModelEvalError, ResultProductError
+from model_evaluation.core.errors import ConfigError, ModelEvalError, ResultProductError
 from model_evaluation.core.files import atomic_json
 from model_evaluation.core.result_product import inspect_run_product
+from model_evaluation.core.batch_product import inspect_batch_product
 from model_evaluation.core.security import redact_diagnostic
 from model_evaluation.core.serialization import json_loads_strict
 from model_evaluation.environment_snapshot import (
@@ -55,6 +57,11 @@ def add_user_config_args(parser: argparse.ArgumentParser) -> None:
             "评测配置路径或 config/evaluations/ 下的 ID；默认 "
             "MODEL_EVAL_EVALUATION_CONFIG 或 config/evaluation.yaml"
         ),
+    )
+    parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help="临时启用标准 Smoke 模式：每个任务只评测 1 个样本，不修改 YAML",
     )
 
 
@@ -98,6 +105,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     commands = parser.add_subparsers(dest="cmd", required=True)
 
+    add_config_commands(commands)
+
     init_parser = commands.add_parser(
         "init",
         help="创建最小 System/Model/Evaluation 工程骨架；不覆盖现有文件",
@@ -137,7 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
         "result-check",
         help="验证最终结果 Schema、跨文件一致性与产物路径",
     )
-    result_check.add_argument("run_dir")
+    result_check.add_argument("run_dir", help="单次 run 或 Matrix batch 结果目录")
 
     inspect_parser = commands.add_parser(
         "inspect",
@@ -214,6 +223,12 @@ def build_parser() -> argparse.ArgumentParser:
     matrix_export.add_argument("plan")
     matrix_export.add_argument("-o", "--output", required=True)
     matrix_export.add_argument("--shards", type=int, default=1)
+    matrix_export.add_argument(
+        "--strategy",
+        choices=("resource_balanced", "round_robin"),
+        default="resource_balanced",
+        help="按逻辑加速卡需求均衡分片，或保留简单轮询",
+    )
 
     matrix_run = commands.add_parser("matrix-run")
     matrix_run.add_argument("matrix")
@@ -269,7 +284,17 @@ def _handle_introspection(args: argparse.Namespace, app: Application) -> bool:
         dump(check_adapter_root(args.root, app.schemas))
         return True
     if args.cmd in {"result-check", "inspect"}:
-        report = inspect_run_product(args.run_dir, app.schemas)
+        product_root = Path(args.run_dir).expanduser()
+        if (product_root / "summary.json").is_file() and (
+            product_root / "runs.json"
+        ).is_file():
+            report = inspect_batch_product(
+                product_root,
+                matrix_schemas=app.matrix_schemas,
+                run_schemas=app.schemas,
+            )
+        else:
+            report = inspect_run_product(product_root, app.schemas)
         if args.cmd == "result-check" or args.format == "json":
             dump(report)
         else:
@@ -280,6 +305,8 @@ def _handle_introspection(args: argparse.Namespace, app: Application) -> bool:
 
 def _handle_validate(args: argparse.Namespace, app: Application) -> None:
     if args.run:
+        if args.smoke:
+            raise ConfigError("--smoke 不能修改已有 RunSpec；请从 System/Evaluation 配置重新生成计划")
         run = app.specs.resolve_run(args.run)
         bundle = app.specs.resolve_bundle(run)
         _, deployment_resolution = resolve_deployment_profile(
@@ -307,7 +334,11 @@ def _handle_validate(args: argparse.Namespace, app: Application) -> None:
         )
         return
 
-    bundle = app.load_user_config(args.system_config, args.evaluation_config)
+    bundle = app.load_user_config(
+        args.system_config,
+        args.evaluation_config,
+        smoke=args.smoke,
+    )
     dump(
         {
             "ok": True,
@@ -408,11 +439,14 @@ def _handle_plan_or_run(args: argparse.Namespace, app: Application) -> bool:
 
     if args.cmd == "plan":
         if args.run:
+            if args.smoke:
+                raise ConfigError("--smoke 不能修改已有 RunSpec；请从 System/Evaluation 配置重新生成计划")
             plan = app.plan(args.run)
         else:
             plan, _ = app.user_matrix_plan(
                 args.system_config,
                 args.evaluation_config,
+                smoke=args.smoke,
             )
         if args.output:
             atomic_json(args.output, plan)
@@ -421,6 +455,8 @@ def _handle_plan_or_run(args: argparse.Namespace, app: Application) -> bool:
 
     if args.cmd == "run":
         if args.run:
+            if args.smoke:
+                raise ConfigError("--smoke 不能修改已有 RunSpec；请从 System/Evaluation 配置重新生成计划")
             plan = app.plan(args.run)
             orchestrator = app.orchestrator(
                 results_root=args.results_root,
@@ -440,6 +476,7 @@ def _handle_plan_or_run(args: argparse.Namespace, app: Application) -> bool:
         plan, bundle = app.user_matrix_plan(
             args.system_config,
             args.evaluation_config,
+            smoke=args.smoke,
         )
         executor = app.matrix_executor(
             results_root=args.results_root or bundle.results_root,
@@ -501,7 +538,14 @@ def _handle_matrix(args: argparse.Namespace, app: Application) -> bool:
         return True
     if args.cmd == "matrix-export":
         plan = app.load_matrix_plan(args.plan)
-        dump(app.export_matrix_plan(plan, args.output, shards=args.shards))
+        dump(
+            app.export_matrix_plan(
+                plan,
+                args.output,
+                shards=args.shards,
+                strategy=args.strategy,
+            )
+        )
         return True
     if args.cmd == "matrix-run":
         plan = app.matrix_plan(args.matrix)
@@ -536,6 +580,8 @@ def _main() -> None:
         return
 
     app = Application(package_root(), project_root=_project_root())
+    if handle_config_command(args, app):
+        return
     if _handle_introspection(args, app):
         return
     if args.cmd == "validate":
@@ -547,6 +593,7 @@ def _main() -> None:
             system_config=args.system_config,
             evaluation_config=args.evaluation_config,
             output_format=args.format,
+            smoke=args.smoke,
         )
         raise SystemExit(0 if ok else 2)
     if args.cmd in {"check", "explain"}:
@@ -556,6 +603,7 @@ def _main() -> None:
             evaluation_config=args.evaluation_config,
             output_format=args.format,
             explain=args.cmd == "explain",
+            smoke=args.smoke,
         )
         raise SystemExit(0 if ok else 2)
     if _handle_plan_or_run(args, app):

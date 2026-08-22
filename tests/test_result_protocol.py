@@ -19,6 +19,103 @@ def _write(path: Path, value: dict) -> None:
     path.write_text(json.dumps(value), encoding="utf-8")
 
 
+def _write_reproduction_records(
+    run: Path,
+    *,
+    model: str = "model",
+    benchmark: str = "bbh",
+    framework: str = "lm_eval",
+    started_at: str = "2026-08-15T12:00:00+08:00",
+    include_runtime: bool = True,
+) -> None:
+    adapters = [
+        {"kind": "backend", "name": "reference", "version": "1.0.0"},
+        {"kind": "evaluator", "name": framework, "version": "1.0.0"},
+    ]
+    selection = {
+        "schema_version": "1.0",
+        "model": model,
+        "platform": "test-platform",
+        "deployment": "test-backend",
+        "benchmark": benchmark,
+        "evaluation": "test-evaluation",
+    }
+    evaluation_environment = {
+        "schema_version": "1.0",
+        "provider": "current",
+        "identity": "test-controller",
+        "python": "/usr/bin/python3",
+        "capabilities": {"schema_version": "1.0", "values": {}},
+    }
+    run_config = {
+        "schema_version": "1.0",
+        "run_id": run.name,
+        "plan_id": "plan-" + "a" * 24,
+        "started_at": started_at,
+        "timezone": "Asia/Shanghai",
+        "adapters": adapters,
+        "selection": selection,
+        "model": {
+            "schema_version": "1.0",
+            "id": model,
+            "source": {"type": "local", "ref": f"/models/{model}"},
+            "experiment_id": model,
+        },
+        "benchmark": {
+            "schema_version": "1.0",
+            "id": benchmark,
+            "dataset": {"provider": "virtual"},
+            "protocol": {},
+            "metrics": ["accuracy"],
+        },
+        "backend": {
+            "schema_version": "1.1",
+            "id": "test-backend",
+            "backend": {"adapter": "reference"},
+            "management": {"mode": "external"},
+        },
+        "evaluator": {
+            "schema_version": "1.1",
+            "id": "test-evaluation",
+            "framework": {"adapter": framework},
+            "binding": {"adapter": "reference_eval"},
+        },
+        "system": {
+            "schema_version": "1.1",
+            "id": "test-platform",
+            "evaluation_environment": {
+                "provider": "current",
+                "profile": "current",
+            },
+        },
+        "resolved_runtime": {
+            "device_probe_skipped": True,
+            "runtime_probe_skipped": True,
+            "reason": "backend is not locally managed",
+            "evaluation_environment": evaluation_environment,
+        },
+    }
+    _write(run / "config" / "run_config.json", run_config)
+    if include_runtime:
+        _write(
+            run / "config" / "runtime_versions.json",
+            {
+                "schema_version": "1.0",
+                "adapters": adapters,
+                "environments": {"evaluator": evaluation_environment},
+                "backend": {
+                    "adapter": "reference",
+                    "adapter_version": "1.0.0",
+                    "management": "external",
+                },
+                "evaluator": {
+                    "adapter": framework,
+                    "adapter_version": "1.0.0",
+                },
+            },
+        )
+
+
 class ResultProtocolTests(unittest.TestCase):
     def setUp(self):
         self.schemas = SchemaStore(ROOT / "model_evaluation" / "schemas")
@@ -83,6 +180,7 @@ class ResultProtocolTests(unittest.TestCase):
         _write(run / "result.json", result)
         _write(run / "metrics.json", metrics)
         _write(run / "terminal.json", terminal)
+        _write_reproduction_records(run)
         return run
 
     def test_success_product_schema_and_consistency(self):
@@ -92,6 +190,31 @@ class ResultProtocolTests(unittest.TestCase):
             self.assertEqual(report["tasks"], 1)
             self.assertEqual(report["effective_samples"], 10)
             self.assertEqual(report["artifacts"], 2)
+            self.assertTrue(report["runtime_recorded"])
+
+    def test_success_product_requires_run_configuration(self):
+        with tempfile.TemporaryDirectory() as td:
+            run = self._success(Path(td))
+            (run / "config" / "run_config.json").unlink()
+            with self.assertRaisesRegex(ResultProductError, "run_config.json"):
+                inspect_run_product(run, self.schemas)
+
+    def test_success_product_requires_runtime_versions(self):
+        with tempfile.TemporaryDirectory() as td:
+            run = self._success(Path(td))
+            (run / "config" / "runtime_versions.json").unlink()
+            with self.assertRaisesRegex(ResultProductError, "runtime_versions.json"):
+                inspect_run_product(run, self.schemas)
+
+    def test_result_identity_must_match_run_configuration(self):
+        with tempfile.TemporaryDirectory() as td:
+            run = self._success(Path(td))
+            config_path = run / "config" / "run_config.json"
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            config["model"]["experiment_id"] = "different-model"
+            _write(config_path, config)
+            with self.assertRaisesRegex(ResultProductError, "result.model"):
+                inspect_run_product(run, self.schemas)
 
     def test_checked_in_sanitized_result_example_is_a_valid_product(self):
         run = (
@@ -111,11 +234,10 @@ class ResultProtocolTests(unittest.TestCase):
     def test_python_result_sdk_exposes_stable_read_only_views(self):
         with tempfile.TemporaryDirectory() as td:
             run = self._success(Path(td))
-            _write(run / "config" / "run_config.json", {"plan_id": "plan-example"})
-            _write(
-                run / "config" / "runtime_versions.json",
-                {"backend": {"version": "1.0"}},
-            )
+            runtime_path = run / "config" / "runtime_versions.json"
+            runtime = json.loads(runtime_path.read_text(encoding="utf-8"))
+            runtime["backend"]["version"] = "1.0"
+            _write(runtime_path, runtime)
             loaded = load_run(run, schemas=self.schemas)
             self.assertEqual(loaded.run_id, run.name)
             self.assertEqual(loaded.outcome, "success")
@@ -233,6 +355,7 @@ class ResultProtocolTests(unittest.TestCase):
             }
             _write(run / "terminal.json", terminal)
             _write(run / "failure.json", failure)
+            _write_reproduction_records(run, include_runtime=False)
             report = inspect_run_product(run, self.schemas)
             self.assertEqual(report["outcome"], "failed")
             self.assertEqual(report["failure_stage"], "EVALUATING")

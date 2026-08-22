@@ -16,4 +16,5 @@ From the repository root:
 ```
 
 The committed TXT and SVG files are sanitized presentation projections. The
-four top-level JSON documents remain the stable machine-readable protocol.
+three top-level result JSON documents and the two records under `config/` remain
+the stable machine-readable protocol.

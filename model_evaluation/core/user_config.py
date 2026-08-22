@@ -7,147 +7,23 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from jsonschema import Draft202012Validator
-
-from model_evaluation.core.config.loader import SpecRepository, reject_inline_secrets
-from model_evaluation.core.config.parsing import load_yaml_strict
+from model_evaluation.core.config.adapter_config import (
+    adapter_user_config as _adapter_user_config,
+    validate_adapter_user_parameters as _validate_adapter_user_parameters,
+)
+from model_evaluation.core.config.documents import load_yaml_document
+from model_evaluation.core.config.loader import SpecRepository
+from model_evaluation.core.config.merge import deep_merge as _deep_merge
+from model_evaluation.core.config.matrix_compiler import compile_matrix_spec
+from model_evaluation.core.config.model_compiler import compile_models
+from model_evaluation.core.config.model_catalog import resolve_model_entries
 from model_evaluation.core.errors import ConfigError
-from model_evaluation.core.serialization import json_loads_strict
-from model_evaluation.core.schema.formats import contract_format_checker
 
 _SAFE = re.compile(r"[^A-Za-z0-9._@+-]+")
 
 
-def _is_platform_metadata(path: Path) -> bool:
-    """Ignore Finder metadata; it is not a user model declaration."""
-    return path.name == ".DS_Store" or any(part.startswith("._") for part in path.parts)
-
-
-def _catalog_yaml_paths(root: Path) -> list[Path]:
-    return sorted(
-        path
-        for path in {*root.rglob("*.yaml"), *root.rglob("*.yml")}
-        if not _is_platform_metadata(path.relative_to(root))
-    )
-
 def _load_yaml(path: str | Path) -> dict[str, Any]:
-    p = Path(path).expanduser().resolve()
-    if not p.is_file():
-        raise ConfigError(f"用户配置文件不存在: {p}")
-    try:
-        obj = load_yaml_strict(p.read_text(encoding="utf-8"))
-    except ConfigError:
-        raise
-    except Exception as exc:
-        raise ConfigError(f"无法读取用户配置 {p}: {exc}") from exc
-    if not isinstance(obj, dict):
-        raise ConfigError(f"用户配置必须是 YAML object: {p}")
-    reject_inline_secrets(obj, str(p))
-    return obj
-
-
-def _catalog_root(evaluation_path: Path, configured: object) -> tuple[Path, bool]:
-    """Resolve the optional user model catalog next to the evaluation tree."""
-    if configured is not None:
-        raw = Path(str(configured)).expanduser()
-        root = raw if raw.is_absolute() else evaluation_path.parent / raw
-        root = root.resolve()
-        if not root.is_dir():
-            raise ConfigError(f"evaluation.model_catalog 目录不存在: {root}")
-        return root, True
-
-    candidates = [evaluation_path.parent / "models"]
-    if evaluation_path.parent.name == "evaluations":
-        candidates.insert(0, evaluation_path.parent.parent / "models")
-    for candidate in candidates:
-        root = candidate.resolve()
-        if root.is_dir() and _catalog_yaml_paths(root):
-            return root, True
-    return candidates[0].resolve(), False
-
-
-def _load_model_catalog(app, evaluation_path: Path, configured: object) -> tuple[dict[str, dict[str, Any]], Path, bool]:
-    root, enabled = _catalog_root(evaluation_path, configured)
-    if not enabled:
-        return {}, root, False
-    catalog: dict[str, dict[str, Any]] = {}
-    sources: dict[str, Path] = {}
-    paths = _catalog_yaml_paths(root)
-    if configured is not None and not paths:
-        raise ConfigError(f"evaluation.model_catalog 中没有 YAML 模型配置: {root}")
-    for path in paths:
-        resolved = path.resolve()
-        if root != resolved.parent and root not in resolved.parents:
-            raise ConfigError(f"模型配置越过 catalog 根目录: {path}")
-        if path.is_symlink():
-            raise ConfigError(f"模型 catalog 不接受符号链接文件: {path}")
-        row = _load_yaml(path)
-        app.matrix_schemas.validate("user_model", row)
-        model_id = str(row["id"]).strip()
-        if model_id in catalog:
-            raise ConfigError(
-                f"模型 catalog id 重复: {model_id!r}: "
-                f"{sources[model_id].relative_to(root)} 与 {path.relative_to(root)}"
-            )
-        catalog[model_id] = copy.deepcopy(row)
-        sources[model_id] = path
-    return catalog, root, True
-
-
-def _resolve_model_entries(app, evaluation: dict[str, Any], evaluation_path: Path) -> tuple[list[dict[str, Any]], Path, bool]:
-    catalog, root, catalog_enabled = _load_model_catalog(
-        app, evaluation_path, evaluation.get("model_catalog")
-    )
-    rows: list[dict[str, Any]] = []
-    for index, item in enumerate(evaluation["models"]):
-        if isinstance(item, str):
-            if catalog_enabled:
-                if item not in catalog:
-                    available = ", ".join(sorted(catalog)) or "<empty>"
-                    raise ConfigError(
-                        f"evaluation.models[{index}] 引用了不存在的模型 catalog id {item!r}; 可选: {available}"
-                    )
-                row = copy.deepcopy(catalog[item])
-            else:
-                row = {"ref": item}
-        else:
-            raw = copy.deepcopy(item)
-            run_resources = raw.pop("resources", None)
-            catalog_id = raw.get("id")
-            is_catalog_reference = bool(
-                catalog_enabled
-                and catalog_id in catalog
-                and set(raw).issubset({"id", "overrides"})
-            )
-            if is_catalog_reference:
-                overrides = raw.get("overrides") or {}
-                identity_fields = {
-                    "id", "label", "source", "ref", "name", "source_type", "revision",
-                    "architecture", "quantization", "format", "provenance", "metadata",
-                }
-                changed_identity = sorted(identity_fields.intersection(overrides))
-                if changed_identity:
-                    raise ConfigError(
-                        f"evaluation.models[{index}].overrides 不能修改模型身份字段: {changed_identity}; "
-                        "请新建一份 model catalog 配置"
-                    )
-                if not catalog_enabled:
-                    raise ConfigError(
-                        f"evaluation.models[{index}].overrides 需要可用的 models/ catalog"
-                    )
-                if catalog_id not in catalog:
-                    raise ConfigError(
-                        f"evaluation.models[{index}] 引用了不存在的模型 catalog id {catalog_id!r}"
-                    )
-                row = _deep_merge(catalog[str(catalog_id)], overrides)
-                row["id"] = str(catalog_id)
-            else:
-                row = raw
-            if run_resources is not None:
-                row["_run_resources"] = run_resources
-        row.pop("schema_version", None)
-        rows.append(row)
-    return rows, root, catalog_enabled
+    return load_yaml_document(path, reject_secrets=True)
 
 
 def _slug(text: str, prefix: str) -> str:
@@ -155,16 +31,6 @@ def _slug(text: str, prefix: str) -> str:
     base = base[:48]
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:8]
     return f"{prefix}-{base}-{digest}"
-
-
-def _deep_merge(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
-    out = copy.deepcopy(base)
-    for key, value in patch.items():
-        if isinstance(value, dict) and isinstance(out.get(key), dict):
-            out[key] = _deep_merge(out[key], value)
-        else:
-            out[key] = copy.deepcopy(value)
-    return out
 
 
 def _absolute(value: str, label: str) -> str:
@@ -217,87 +83,6 @@ def _selected_profile(system: dict[str, Any], evaluation: dict[str, Any], kind: 
         available = ", ".join(sorted(table))
         raise ConfigError(f"{label}={selected!r} 不存在；可选: {available}")
     return selected, copy.deepcopy(table[selected])
-
-
-def _model_devices(
-    resources: object,
-    *,
-    available_devices: list[str] | None,
-    mode: str,
-    label: str,
-) -> list[str] | None:
-    value = resources or {}
-    if not isinstance(value, dict):
-        raise ConfigError(f"{label}.resources 必须是 object")
-    count = value.get("device_count")
-    if count is None:
-        return copy.deepcopy(available_devices)
-    if mode != "managed":
-        raise ConfigError(f"{label}.resources.device_count 仅适用于 managed backend")
-    if available_devices is None:
-        raise ConfigError(
-            f"{label}.resources.device_count 需要 System hardware profile 显式提供 devices 设备池"
-        )
-    count = int(count)
-    if count > len(available_devices):
-        raise ConfigError(
-            f"{label}.resources.device_count={count} 超过可用设备池 {available_devices}"
-        )
-    return copy.deepcopy(available_devices[:count])
-
-
-def _adapter_user_config(client) -> dict[str, Any]:
-    """Return the versioned, public user-configuration contract declared by an Adapter."""
-    value = client.identity.manifest.get("user_config") or {}
-    if not isinstance(value, dict):
-        raise ConfigError(f"adapter {client.identity.kind}/{client.identity.name} user_config 必须是 object")
-    if value and value.get("schema_version") != "1.0":
-        raise ConfigError(
-            f"adapter {client.identity.kind}/{client.identity.name} user_config.schema_version 不受支持: "
-            f"{value.get('schema_version')!r}"
-        )
-    return copy.deepcopy(value)
-
-
-def _validate_adapter_user_parameters(app, kind: str, adapter_name: str, value: object, label: str):
-    """Validate adapter-owned user parameters and always resolve adapter identity.
-
-    Calling registry.get before the empty-parameter fast path is deliberate: `validate`
-    must reject a selected-but-missing adapter even when that profile has no parameters.
-    """
-    client = app.registry.get(kind, adapter_name)
-    if value in (None, {}):
-        return client
-    if not isinstance(value, dict):
-        raise ConfigError(f"{label} 必须是 object")
-    user_config = _adapter_user_config(client)
-    schema_name = user_config.get("parameters_schema")
-    if not schema_name:
-        raise ConfigError(
-            f"{kind} adapter {adapter_name!r} 未声明用户参数 schema，不能安全接受 {label} 覆盖"
-        )
-    adapter_root = client.identity.path.parent.resolve()
-    schema_path = (adapter_root / str(schema_name)).resolve()
-    try:
-        schema_path.relative_to(adapter_root)
-    except ValueError as exc:
-        raise ConfigError(f"adapter {kind}/{adapter_name} 的 user_config.parameters_schema 越界") from exc
-    if not schema_path.is_file():
-        raise ConfigError(f"adapter {kind}/{adapter_name} 缺少用户参数 schema: {schema_path.name}")
-    try:
-        schema = json_loads_strict(schema_path.read_text(encoding="utf-8"))
-        Draft202012Validator.check_schema(schema)
-        validator = Draft202012Validator(schema, format_checker=contract_format_checker())
-        errors = sorted(validator.iter_errors(value), key=lambda e: list(e.absolute_path))
-    except ConfigError:
-        raise
-    except Exception as exc:
-        raise ConfigError(f"无法加载 {kind}/{adapter_name} 用户参数 schema: {exc}") from exc
-    if errors:
-        err = errors[0]
-        path = ".".join(str(x) for x in err.absolute_path) or "<root>"
-        raise ConfigError(f"{label} 参数不合法（{kind}/{adapter_name}，{path}）：{err.message}")
-    return client
 
 
 def _merge_ergonomic_parameter(params: dict[str, Any], key: str, value: object, *, label: str, absolute: bool = False) -> None:
@@ -410,74 +195,6 @@ def _backend_default_parameters(client) -> dict[str, Any]:
     return copy.deepcopy(value)
 
 
-def _model_backend_parameters(
-    app,
-    row: dict[str, Any],
-    *,
-    backend_type: str,
-    label: str,
-) -> dict[str, Any]:
-    """Select and validate the model parameters owned by the active Backend.
-
-    ``backends`` is the portable catalog form: each Backend gets an independent
-    parameter namespace, and only the selected Backend's namespace is consumed.
-    The singular ``backend`` key remains both the legacy catalog form and the
-    convenient per-evaluation override for the currently selected Backend.  A
-    catalog file containing both forms is rejected by its schema; both can only
-    reach this function after a valid namespaced catalog entry was merged with a
-    valid temporary ``overrides.backend`` object.  In that case the temporary
-    object is deep-merged over the selected namespace.
-    """
-    has_legacy = "backend" in row
-    has_namespaced = "backends" in row
-    if has_namespaced:
-        namespaces = row.get("backends") or {}
-        value = copy.deepcopy(namespaces.get(backend_type) or {})
-        parameter_label = f"{label}.backends.{backend_type}"
-        if has_legacy:
-            value = _deep_merge(value, copy.deepcopy(row.get("backend") or {}))
-            parameter_label = f"{label}.overrides.backend"
-    else:
-        value = copy.deepcopy(row.get("backend") or {})
-        parameter_label = f"{label}.backend"
-
-    if value:
-        _validate_adapter_user_parameters(
-            app, "backend", backend_type, value, parameter_label,
-        )
-    return value
-
-
-def _derived_backend_parameters(client, *, profile_parameters: dict[str, Any], run_parameters: dict[str, Any], devices: list[str] | None, mode: str) -> dict[str, Any]:
-    out = copy.deepcopy(run_parameters)
-    if mode != "managed":
-        return out
-    rules = _adapter_user_config(client).get("derived_parameters") or {}
-    if not isinstance(rules, dict):
-        raise ConfigError(f"backend adapter {client.identity.name!r} user_config.derived_parameters 必须是 object")
-    for key, raw_rule in rules.items():
-        if key in profile_parameters or key in out:
-            continue
-        if not isinstance(raw_rule, dict):
-            raise ConfigError(f"backend adapter {client.identity.name!r} derived parameter {key!r} 规则必须是 object")
-        source = raw_rule.get("source")
-        if source == "selected_device_count":
-            # No Core-owned device identity/default exists. If the user did not make an
-            # explicit selection, leave the Adapter's declared default untouched.
-            if devices is None:
-                continue
-            value = len(devices)
-        else:
-            raise ConfigError(
-                f"backend adapter {client.identity.name!r} derived parameter {key!r} 使用未知 source: {source!r}"
-            )
-        minimum = raw_rule.get("minimum")
-        if minimum is not None:
-            value = max(int(minimum), int(value))
-        out[str(key)] = value
-    return out
-
-
 @dataclass(frozen=True)
 class UserConfigBundle:
     system: dict[str, Any]
@@ -500,14 +217,20 @@ class UserConfigResolver:
     def __init__(self, app):
         self.app = app
 
-    def load(self, system_path: str | Path, evaluation_path: str | Path) -> UserConfigBundle:
+    def load(
+        self,
+        system_path: str | Path,
+        evaluation_path: str | Path,
+        *,
+        smoke: bool = False,
+    ) -> UserConfigBundle:
         system_file = Path(system_path).expanduser().resolve()
         evaluation_file = Path(evaluation_path).expanduser().resolve()
         system = _load_yaml(system_file)
         evaluation = _load_yaml(evaluation_file)
         self.app.matrix_schemas.validate("user_system", system)
         self.app.matrix_schemas.validate("user_evaluation", evaluation)
-        model_entries, model_catalog_root, model_catalog_enabled = _resolve_model_entries(
+        model_entries, model_catalog_root, model_catalog_enabled = resolve_model_entries(
             self.app, evaluation, evaluation_file
         )
         # Resolve into a private repository.  The shared Application repository
@@ -681,107 +404,34 @@ class UserConfigResolver:
         specs.register("deployment", deployment)
 
         evaluation_spec = self._evaluation(
-            evaluation_id, evaluator, evaluation, evaluator_client, specs=specs
+            evaluation_id,
+            evaluator,
+            evaluation,
+            evaluator_client,
+            specs=specs,
+            smoke=smoke,
         )
         specs.register("evaluation", evaluation_spec)
 
-        generated_model_ids: list[str] = []
-        per_model_overrides: dict[str, dict[str, Any]] = {}
-        model_names: dict[str, str] = {}
-        seen_ids: set[str] = set()
-
-        for row in model_entries:
-            run_resources = copy.deepcopy(row.pop("_run_resources", None) or {})
-            source_value = row.get("source")
-            if source_value is not None and not isinstance(source_value, dict):
-                raise ConfigError("model source 必须是 object")
-            ref = str(
-                (source_value or {}).get("ref") or row.get("ref") or row.get("name") or ""
-            ).strip()
-            if not ref:
-                raise ConfigError("模型配置需要 source.ref（或 legacy ref/name）")
-            experiment_id = str(row.get("id") or ref).strip()
-            label = str(row.get("label") or row.get("name") or experiment_id).strip()
-            if not experiment_id or not label:
-                raise ConfigError("evaluation.models id/label cannot be empty")
-            if experiment_id in seen_ids:
-                raise ConfigError(f"evaluation.models id 重复: {experiment_id}")
-            seen_ids.add(experiment_id)
-            model_id = _slug(experiment_id, "user-model")
-            default_source_type = "local" if deployment.get("model_location") else "other"
-            source_type = str((source_value or {}).get("type") or row.get("source_type") or default_source_type)
-            source: dict[str, Any] = {"type": source_type, "ref": ref}
-            revision = (source_value or {}).get("revision", row.get("revision"))
-            if revision is not None:
-                source["revision"] = str(revision)
-            model: dict[str, Any] = {
-                "schema_version": "1.0",
-                "id": model_id,
-                "source": source,
-                "provenance": copy.deepcopy(row.get("provenance") or {"policy": "migration"}),
-                "experiment_id": experiment_id,
-                "label": label,
-                "metadata": copy.deepcopy(row.get("metadata") or {}),
-            }
-            for key in ("architecture", "quantization", "format", "chat_template"):
-                if row.get(key) is not None:
-                    model[key] = str(row[key])
-            if row.get("context_length") is not None:
-                model["context_length"] = int(row["context_length"])
-            if row.get("trust_remote_code") is not None:
-                model["trust_remote_code"] = bool(row["trust_remote_code"])
-            if row.get("tokenizer") is not None:
-                tokenizer = row["tokenizer"]
-                model["tokenizer"] = {"ref": tokenizer} if isinstance(tokenizer, str) else copy.deepcopy(tokenizer)
-            specs.register("model", model)
-            generated_model_ids.append(model_id)
-            model_names[model_id] = label
-
-            patch: dict[str, Any] = {}
-            model_backend_parameters = _model_backend_parameters(
+        compiled_models = compile_models(
+            app=self.app,
+            specs=specs,
+            model_entries=model_entries,
+            deployment=deployment,
+            backend_type=backend_type,
+            backend_client=backend_client,
+            mode=mode,
+            available_devices=devices,
+            backend_profile_parameters=backend_profile_parameters,
+            backend_run_parameters=backend_run_parameters,
+            slug=_slug,
+            environment_selection=lambda value, label: _environment_selection(
                 self.app,
-                row,
-                backend_type=backend_type,
-                label=f"evaluation.models[{experiment_id}]",
-            )
-            selected_model_devices = _model_devices(
-                run_resources,
-                available_devices=devices,
-                mode=mode,
-                label=f"evaluation.models[{experiment_id}]",
-            )
-            if run_resources:
-                patch["platform"] = {"device": {"devices": selected_model_devices}}
-            run_backend_parameters = _deep_merge(backend_run_parameters, model_backend_parameters)
-            run_backend_parameters = _derived_backend_parameters(
-                backend_client,
-                profile_parameters=backend_profile_parameters,
-                run_parameters=run_backend_parameters,
-                devices=selected_model_devices,
-                mode=mode,
-            )
-            if run_backend_parameters:
-                patch["deployment"] = {"parameters": run_backend_parameters}
-            if row.get("model_location"):
-                patch.setdefault("deployment", {})["model_location"] = copy.deepcopy(row["model_location"])
-            if mode in {"external", "attached"}:
-                patch.setdefault("deployment", {}).setdefault("endpoint", {})["model_id"] = ref
-
-            model_envs = row.get("environments") or {}
-            if "backend" in model_envs:
-                if mode != "managed":
-                    raise ConfigError(f"evaluation.models[{experiment_id}].environments.backend 仅适用于 managed backend")
-                patch.setdefault("platform", {})["backend_environment"] = _environment_selection(
-                    self.app, model_envs["backend"], system=system,
-                    label=f"evaluation.models[{experiment_id}].environments.backend",
-                )
-            if "evaluator" in model_envs:
-                patch.setdefault("platform", {})["evaluation_environment"] = _environment_selection(
-                    self.app, model_envs["evaluator"], system=system,
-                    label=f"evaluation.models[{experiment_id}].environments.evaluator",
-                )
-            if patch:
-                per_model_overrides[model_id] = patch
+                value,
+                system=system,
+                label=label,
+            ),
+        )
 
         benchmark_ids = [str(x) for x in evaluation["benchmarks"]]
         for benchmark_id in benchmark_ids:
@@ -795,29 +445,21 @@ class UserConfigResolver:
                 f"benchmark[{benchmark_id}].dataset.parameters",
             )
 
-        global_overrides: dict[str, Any] = {}
-        if "offline" in evaluation:
-            global_overrides["offline"] = bool(evaluation["offline"])
-        if "dataset_timeout_seconds" in evaluation:
-            global_overrides["dataset_timeout_seconds"] = evaluation["dataset_timeout_seconds"]
-        matrix: dict[str, Any] = {
-            "schema_version": "1.0",
-            "id": _slug(
-                f"{system_name}:{platform_key}:{backend_profile_id}:{evaluator_profile_id}:evaluation",
-                "user-matrix",
-            ),
-            "models": generated_model_ids,
-            "platforms": [platform_id],
-            "deployments": [deployment_id],
-            "benchmarks": benchmark_ids,
-            "evaluations": [evaluation_id],
-            "execution": {"mode": "serial", **copy.deepcopy(evaluation.get("execution") or {})},
-            "tags": list(evaluation.get("tags") or ["user-config"]),
-        }
-        if global_overrides:
-            matrix["overrides"] = global_overrides
-        if per_model_overrides:
-            matrix["per_model_overrides"] = per_model_overrides
+        matrix = compile_matrix_spec(
+            system_name=system_name,
+            platform_key=platform_key,
+            backend_profile_id=backend_profile_id,
+            evaluator_profile_id=evaluator_profile_id,
+            platform_id=platform_id,
+            deployment_id=deployment_id,
+            evaluation_id=evaluation_id,
+            model_ids=compiled_models.ids,
+            benchmark_ids=benchmark_ids,
+            evaluation=evaluation,
+            per_model_overrides=compiled_models.overrides,
+            slug=_slug,
+            smoke=smoke,
+        )
         self.app.matrix_schemas.validate("matrix_spec", matrix)
 
         selected_profiles = {"backend": backend_profile_id, "evaluator": evaluator_profile_id}
@@ -833,12 +475,13 @@ class UserConfigResolver:
                 "platform_id": platform_id,
                 "deployment_id": deployment_id,
                 "evaluation_id": evaluation_id,
-                "model_ids": model_names,
+                "model_ids": compiled_models.names,
                 "model_catalog": {
                     "enabled": model_catalog_enabled,
                     "root": str(model_catalog_root),
                 },
                 "selected_profiles": selected_profiles,
+                "run_mode": "smoke" if smoke else "standard",
             },
             specs=specs,
         )
@@ -915,6 +558,7 @@ class UserConfigResolver:
         evaluator_client,
         *,
         specs: SpecRepository,
+        smoke: bool = False,
     ) -> dict[str, Any]:
         evaluator_type = str(evaluator["type"])
         preset = str(evaluator.get("preset") or f"{evaluator_type}_current")
@@ -953,4 +597,6 @@ class UserConfigResolver:
             params = _deep_merge(params, evaluator_parameters)
         if params:
             out["parameters"] = params
+        if smoke:
+            out["execution"] = {"mode": "smoke", "sample_limit": 1}
         return out

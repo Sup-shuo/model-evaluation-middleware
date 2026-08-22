@@ -1,42 +1,55 @@
 {
   "schema_version": "1.0",
+  "adapters": [
+    {"kind": "device", "name": "cpu", "version": "1.0.0"},
+    {"kind": "runtime", "name": "cpu", "version": "1.0.0"},
+    {"kind": "environment", "name": "current", "version": "1.0.0"},
+    {"kind": "backend", "name": "reference", "version": "1.0.0"},
+    {"kind": "dataset", "name": "virtual", "version": "1.0.0"},
+    {"kind": "binding", "name": "reference_eval", "version": "1.0.0"},
+    {"kind": "evaluator", "name": "reference_eval", "version": "1.0.0"}
+  ],
   "device": {
+    "schema_version": "1.0",
     "vendor": "cpu",
-    "devices": []
+    "device_type": "cpu",
+    "devices": [{"id": "0", "name": "Example CPU"}],
+    "capabilities": {"schema_version": "1.0", "values": {"device.multi_device": false}}
   },
   "runtime": {
+    "schema_version": "1.0",
     "family": "cpu",
     "version": "generic",
-    "driver_version": "N/A"
+    "driver_version": "N/A",
+    "available": true,
+    "capabilities": {"schema_version": "1.0", "values": {"runtime.compatible_device_vendors": ["cpu"]}}
   },
   "backend": {
     "adapter": "reference",
     "adapter_version": "1.0.0",
     "management": "managed",
-    "probes": [
-      {
-        "id": "backend.import",
-        "version": "1.0.0"
-      }
-    ]
+    "version": "1.0.0",
+    "probes": [{"id": "backend.import", "status": "passed", "version": "1.0.0"}]
   },
   "evaluator": {
     "adapter": "reference_eval",
     "adapter_version": "1.0.0",
-    "facts": {
-      "framework": "reference_eval",
-      "framework_version": "1.0.0",
-      "framework_file": "/opt/reference-evaluator",
-      "cache_root": "/opt/model-evaluation/cache",
-      "packages": {
-        "transformers": "N/A"
-      }
-    }
+    "facts": {"framework": "reference_eval", "framework_version": "1.0.0"}
   },
   "environments": {
-    "controller": {
+    "backend": {
+      "provider": "current",
+      "identity": "example-controller",
       "python": "/usr/bin/python3",
-      "version": "3.11"
+      "python_implementation": "CPython",
+      "python_version": "3.11"
+    },
+    "evaluator": {
+      "provider": "current",
+      "identity": "example-controller",
+      "python": "/usr/bin/python3",
+      "python_implementation": "CPython",
+      "python_version": "3.11"
     }
   }
 }

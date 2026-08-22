@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "matrix_scheduler_job.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "job_id", "source_matrix_id", "plan_id", "plan_path", "intent", "requirements", "resource_weight", "compatibility"],
+  "properties": {
+    "schema_version": {"const": "1.1"},
+    "job_id": {"type": "string", "pattern": "^job-[a-f0-9]{24}$"},
+    "source_matrix_id": {"type": "string", "pattern": "^matrix-[a-f0-9]{24}$"},
+    "plan_id": {"type": "string", "minLength": 1},
+    "plan_path": {"type": "string", "pattern": "^plans/[0-9]{6}-[A-Za-z0-9._:+-]+\\.json$"},
+    "intent": {
+      "type": "object", "additionalProperties": false,
+      "required": ["model", "benchmark", "backend", "evaluator"],
+      "properties": {
+        "model": {"type": "string", "minLength": 1},
+        "benchmark": {"type": "string", "minLength": 1},
+        "backend": {"type": "string", "minLength": 1},
+        "evaluator": {"type": "string", "minLength": 1}
+      }
+    },
+    "requirements": {
+      "type": "object", "additionalProperties": false,
+      "required": ["accelerator", "backend", "environments", "claims"],
+      "properties": {
+        "accelerator": {
+          "type": "object", "additionalProperties": false, "required": ["count"],
+          "properties": {
+            "count": {"type": "integer", "minimum": 0},
+            "type": {"type": "string", "minLength": 1},
+            "runtime_family": {"type": "string", "minLength": 1}
+          }
+        },
+        "backend": {
+          "type": "object", "additionalProperties": false, "required": ["adapter", "management_mode"],
+          "properties": {
+            "adapter": {"type": "string", "minLength": 1},
+            "management_mode": {"type": "string", "minLength": 1}
+          }
+        },
+        "environments": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["evaluator"],
+          "properties": {
+            "backend": {"$ref": "#/$defs/environmentRequirement"},
+            "evaluator": {"$ref": "#/$defs/environmentRequirement"}
+          }
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["kind", "count", "exclusive_count"],
+            "properties": {
+              "kind": {"type": "string", "minLength": 1},
+              "count": {"type": "integer", "minimum": 1},
+              "exclusive_count": {"type": "integer", "minimum": 0}
+            }
+          }
+        }
+      }
+    },
+    "resource_weight": {"type": "integer", "minimum": 1},
+    "compatibility": {"enum": ["compatible", "incompatible", "unknown"]}
+  },
+  "$defs": {
+    "environmentRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "capability_id"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "capability_id": {"type": "string", "pattern": "^env-[a-f0-9]{24}$"}
+      }
+    }
+  }
+}

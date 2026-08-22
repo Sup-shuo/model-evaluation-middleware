@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, RefResolver
 
 from model_evaluation.core.config.loader import reject_inline_secrets
 from model_evaluation.core.config.parsing import load_json_strict, load_yaml_strict
@@ -20,11 +20,41 @@ class MatrixSchemas:
             raise ConfigError(f"matrix schema missing: {path}")
         return load_json_strict(path.read_text(encoding="utf-8"))
 
+    def _resolver_store(self) -> dict[str, dict]:
+        """Preload package schemas so validation never performs remote I/O.
+
+        ``jsonschema.RefResolver`` applies nested relative ``$id`` scopes
+        differently across supported jsonschema releases. Register both the
+        canonical schema URI and its legacy shadow URI while the project still
+        supports RefResolver.
+        """
+
+        protocol_root = self.root.parent
+        shadow_root = protocol_root.parent
+        store: dict[str, dict] = {}
+        for path in protocol_root.glob("*.schema.json"):
+            document = load_json_strict(path.read_text(encoding="utf-8"))
+            store[path.as_uri()] = document
+            store[(shadow_root / path.name).as_uri()] = document
+        for path in self.root.glob("*.schema.json"):
+            document = load_json_strict(path.read_text(encoding="utf-8"))
+            store[path.as_uri()] = document
+        return store
+
     def validate(self, name: str, value: object) -> None:
         schema = self._load(name)
+        schema_path = self.root / f"{name}.schema.json"
         Draft202012Validator.check_schema(schema)
         validator = Draft202012Validator(
             schema,
+            resolver=RefResolver(
+                # Anchor relative refs at the schema document, not merely its
+                # directory. This also makes refs from schemas/user back to the
+                # package-level protocol schemas resolve exactly once.
+                base_uri=schema_path.as_uri(),
+                referrer=schema,
+                store=self._resolver_store(),
+            ),
             format_checker=contract_format_checker(),
         )
         errors = sorted(validator.iter_errors(value), key=lambda error: list(error.absolute_path))

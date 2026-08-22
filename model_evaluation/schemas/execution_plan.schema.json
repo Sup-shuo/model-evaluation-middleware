@@ -10,7 +10,8 @@
     "adapters",
     "compatibility",
     "resources",
-    "stages"
+    "stages",
+    "resolved"
   ],
   "properties": {
     "schema_version": {
@@ -72,6 +73,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {"$ref": "capability_diagnostic.schema.json"}
         }
       }
     },
@@ -83,24 +88,23 @@
     },
     "stages": {
       "type": "array",
-      "items": {
-        "enum": [
-          "PLATFORM_READY",
-          "DATA_READY",
-          "TASK_READY",
-          "EVALUATOR_PREFLIGHT",
-          "SERVICE_STARTING",
-          "SERVICE_READY",
-          "EVALUATING",
-          "NORMALIZING",
-          "CLEANING"
-        ]
-      },
-      "minItems": 1
+      "prefixItems": [
+        {"const": "PLATFORM_READY"},
+        {"const": "DATA_READY"},
+        {"const": "TASK_READY"},
+        {"const": "EVALUATOR_PREFLIGHT"},
+        {"const": "SERVICE_STARTING"},
+        {"const": "SERVICE_READY"},
+        {"const": "EVALUATING"},
+        {"const": "NORMALIZING"},
+        {"const": "CLEANING"}
+      ],
+      "items": false,
+      "minItems": 9,
+      "maxItems": 9
     },
     "resolved": {
-      "type": "object",
-      "additionalProperties": true
+      "$ref": "resolved_execution.schema.json"
     },
     "protocol_fingerprints": {
       "type": "object",
