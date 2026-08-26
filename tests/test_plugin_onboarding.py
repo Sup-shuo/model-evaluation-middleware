@@ -175,6 +175,45 @@ class PluginAndOnboardingTests(unittest.TestCase):
                 original,
             )
 
+    def test_init_accepts_ready_to_edit_real_run_values(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "guided-project"
+            initialize_project(
+                root,
+                hardware="mlu",
+                model_id="org/model",
+                model_ref="org/model",
+                models_root="/data",
+                evaluator_root="/opt/lm-evaluation-harness",
+                cache_root="/data/cache",
+                results_root="results",
+                benchmark="bbh",
+                backend_executable="/opt/vllm/bin/vllm",
+            )
+            system = load_yaml_strict(
+                (root / "config" / "system.yaml").read_text(encoding="utf-8")
+            )
+            model = load_yaml_strict(
+                (root / "config" / "models" / "example.yaml").read_text(
+                    encoding="utf-8"
+                )
+            )
+            evaluation = load_yaml_strict(
+                (root / "config" / "evaluation.yaml").read_text(encoding="utf-8")
+            )
+            self.user_schemas.validate("user_system", system)
+            self.user_schemas.validate("user_model", model)
+            self.user_schemas.validate("user_evaluation", evaluation)
+            self.assertEqual(system["models"]["root"], "/data")
+            self.assertEqual(
+                system["profiles"]["backend"]["vllm"]["executable"],
+                "/opt/vllm/bin/vllm",
+            )
+            self.assertEqual(model["id"], "org/model")
+            self.assertEqual(model["source"]["ref"], "org/model")
+            self.assertEqual(evaluation["models"], ["org/model"])
+            self.assertEqual(evaluation["benchmarks"], ["bbh"])
+
     def test_init_supports_metax_maca_template(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "metax-project"

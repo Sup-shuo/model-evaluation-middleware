@@ -81,6 +81,21 @@ class CoreTests(unittest.TestCase):
             {"env_patch": {"set": {"MACA_VISIBLE_DEVICES": "2"}}},
         )
 
+    def test_metax_device_declares_vllm_quantization_constraints(self):
+        mod=_load_adapter_impl_for_test("device", "metax")
+        inventory=[{"id":"0","name":"MetaX MXC500","uuid":"GPU-test-0"}]
+        with patch.object(mod,"_listed_devices",return_value=inventory), patch.object(
+            mod,"_memory_bytes",return_value=64 * 1024**3
+        ):
+            descriptor=mod.probe({"requested_devices":[0]}, {})
+        capabilities=descriptor["capabilities"]["values"]
+        self.assertEqual(
+            capabilities[
+                "device.metax.vllm.quantization.compressed-tensors.supported_group_sizes"
+            ],
+            [64,128],
+        )
+
     def test_maca_runtime_patch_is_explicit_and_machine_owned(self):
         mod=_load_adapter_impl_for_test("runtime", "maca")
         with tempfile.TemporaryDirectory() as td:
@@ -113,6 +128,16 @@ class CoreTests(unittest.TestCase):
             (root/'._adapter_manifest.schema.json').write_bytes(b'\x00AppleDouble')
             checked=SchemaStore(root).validate_all_schemas()
             self.assertEqual(checked,[source.name])
+
+    def test_schema_store_resolves_nested_relative_ids_offline(self):
+        self.schemas.validate(
+            "runtime_versions",
+            {
+                "schema_version": "1.0",
+                "adapters": [],
+                "environments": {"evaluator": {"provider": "current"}},
+            },
+        )
 
     def test_bbh_basic_integrity_does_not_hash_or_require_official_sample_count(self):
         from unittest.mock import patch
@@ -279,7 +304,13 @@ class CoreTests(unittest.TestCase):
                     'model_location':{'local_path':str(model)},
                     'parameters':{'tensor_parallel_size':2,'dependency_probe_timeout_seconds':33,'model_probe_timeout_seconds':77},
                 },
-                'platform':{},'endpoint':{'host':'127.0.0.1','port':8091},
+                'platform':{'device':{
+                    'vendor':'metax',
+                    'capabilities':{'values':{
+                        'device.metax.vllm.quantization.compressed-tensors.supported_group_sizes':[64,128],
+                        'device.metax.vllm.quantization.compressed-tensors.reason':'test constraint',
+                    }},
+                }},'endpoint':{'host':'127.0.0.1','port':8091},
                 'log_path':str(Path(td)/'backend.log'),'network_policy':'offline',
             }
             out=vllm_impl.plan_preflight(inp,{'offline':True})
@@ -295,6 +326,44 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(payload['quantization'],'awq')
             self.assertEqual(payload['max_model_len'],8192)
             self.assertEqual(payload['tensor_parallel_size'],2)
+            self.assertEqual(payload['device_vendor'],'metax')
+            self.assertEqual(
+                payload['quantization_constraints']['compressed-tensors'][
+                    'supported_group_sizes'
+                ],
+                [64,128],
+            )
+
+    def test_vllm_preflight_rejects_device_unsupported_quantization_group_size(self):
+        from model_evaluation.adapters.backend.vllm import preflight
+        with tempfile.TemporaryDirectory() as td:
+            model=Path(td)/'model'; model.mkdir()
+            (model/'config.json').write_text(json.dumps({
+                'quantization_config':{
+                    'quant_method':'compressed-tensors',
+                    'config_groups':{'group_0':{
+                        'weights':{'num_bits':4,'group_size':32}
+                    }},
+                },
+            }),encoding='utf-8')
+            payload={
+                'device_vendor':'metax',
+                'quantization_constraints':{
+                    'compressed-tensors':{
+                        'supported_group_sizes':[64,128],
+                        'reason':'MetaX test constraint',
+                        'recommendation':'use BF16',
+                    },
+                },
+            }
+            method,sizes,path=preflight._local_quantization_metadata(str(model))
+            self.assertEqual((method,sizes),('compressed-tensors',[32]))
+            with self.assertRaises(preflight.PreflightFailure) as caught:
+                preflight._enforce_quantization_constraints(
+                    payload,quantization=method,group_sizes=sizes,config_path=path
+                )
+            self.assertEqual(caught.exception.code,'MODEL_QUANTIZATION_INCOMPATIBLE')
+            self.assertEqual(caught.exception.details['supported_group_sizes'],[64,128])
 
     def test_vllm_language_model_only_is_adapter_owned_and_reaches_preflight(self):
         from model_evaluation.adapters.backend.vllm import impl as vllm_impl

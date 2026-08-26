@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -33,7 +34,19 @@ HARDWARE_TEMPLATES = {
 }
 
 
-def _system_yaml(hardware: str) -> str:
+def _yaml_scalar(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _system_yaml(
+    hardware: str,
+    *,
+    models_root: str,
+    evaluator_root: str,
+    cache_root: str,
+    results_root: str,
+    backend_executable: str,
+) -> str:
     selected = HARDWARE_TEMPLATES[hardware]
     runtime_root = f"\n        root: {selected.runtime_root}" if selected.runtime_root else ""
     runtime_parameters = ""
@@ -68,7 +81,7 @@ profiles:
   backend:
     vllm:
       type: vllm
-      executable: vllm
+      executable: {_yaml_scalar(backend_executable)}
       compatibility:
         runtime_families: [{selected.runtime_family}]
       environment: controller
@@ -76,26 +89,27 @@ profiles:
   evaluator:
     lm_eval:
       type: lm_eval
-      root: /REPLACE_WITH_LM_EVALUATION_HARNESS
+      root: {_yaml_scalar(evaluator_root)}
       environment: controller
 
 models:
-  root: /REPLACE_WITH_MODEL_ROOT
+  root: {_yaml_scalar(models_root)}
 
 paths:
-  cache: /REPLACE_WITH_CACHE_ROOT
-  results: results
+  cache: {_yaml_scalar(cache_root)}
+  results: {_yaml_scalar(results_root)}
 '''
 
 
-_MODEL_YAML = '''schema_version: "1.0"
+def _model_yaml(model_id: str, model_ref: str) -> str:
+    return f'''schema_version: "1.0"
 
-id: example-model
-label: Example local model
+id: {_yaml_scalar(model_id)}
+label: {_yaml_scalar(model_id)}
 
 source:
   type: local
-  ref: REPLACE_WITH_MODEL_RELATIVE_PATH
+  ref: {_yaml_scalar(model_ref)}
 
 backends:
   vllm:
@@ -106,13 +120,14 @@ provenance:
 '''
 
 
-_EVALUATION_YAML = '''schema_version: "1.3"
+def _evaluation_yaml(model_id: str, benchmark: str) -> str:
+    return f'''schema_version: "1.3"
 
 models:
-  - example-model
+  - {_yaml_scalar(model_id)}
 
 benchmarks:
-  - bbh
+  - {_yaml_scalar(benchmark)}
 
 backend:
   profile: vllm
@@ -151,14 +166,46 @@ __pycache__/
 '''
 
 
-def initialize_project(target: str | Path, *, hardware: str) -> list[Path]:
+def initialize_project(
+    target: str | Path,
+    *,
+    hardware: str,
+    model_id: str = "example-model",
+    model_ref: str = "REPLACE_WITH_MODEL_RELATIVE_PATH",
+    models_root: str = "/REPLACE_WITH_MODEL_ROOT",
+    evaluator_root: str = "/REPLACE_WITH_LM_EVALUATION_HARNESS",
+    cache_root: str = "/REPLACE_WITH_CACHE_ROOT",
+    results_root: str = "results",
+    benchmark: str = "bbh",
+    backend_executable: str = "vllm",
+) -> list[Path]:
     if hardware not in HARDWARE_TEMPLATES:
         raise ConfigError(f"unsupported onboarding hardware template: {hardware}")
+    required = {
+        "model_id": model_id,
+        "model_ref": model_ref,
+        "models_root": models_root,
+        "evaluator_root": evaluator_root,
+        "cache_root": cache_root,
+        "results_root": results_root,
+        "benchmark": benchmark,
+        "backend_executable": backend_executable,
+    }
+    empty = sorted(name for name, value in required.items() if not str(value).strip())
+    if empty:
+        raise ConfigError(f"init values must not be empty: {', '.join(empty)}")
     root = Path(target).expanduser().resolve()
     planned = {
-        root / "config" / "system.yaml": _system_yaml(hardware),
-        root / "config" / "evaluation.yaml": _EVALUATION_YAML,
-        root / "config" / "models" / "example.yaml": _MODEL_YAML,
+        root / "config" / "system.yaml": _system_yaml(
+            hardware,
+            models_root=models_root,
+            evaluator_root=evaluator_root,
+            cache_root=cache_root,
+            results_root=results_root,
+            backend_executable=backend_executable,
+        ),
+        root / "config" / "evaluation.yaml": _evaluation_yaml(model_id, benchmark),
+        root / "config" / "models" / "example.yaml": _model_yaml(model_id, model_ref),
         root / ".gitignore": _GITIGNORE,
     }
     conflicts = [path for path in planned if path.exists()]

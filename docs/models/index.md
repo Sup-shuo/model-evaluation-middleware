@@ -12,11 +12,19 @@ model.
 | Pattern | Example | What it demonstrates |
 |---|---|---|
 | Safetensors model | [`qwen_example.yaml`](../../config/models/qwen_example.yaml) | Local material, architecture, context, and vLLM loading parameters |
+| AWQ / compressed-tensors | [`qwen_awq_example.yaml`](../../config/models/qwen_awq_example.yaml) | Quantization metadata and a device-specific compatibility note |
+| Vision-language model | [`qwen_vl_awq_example.yaml`](../../config/models/qwen_vl_awq_example.yaml) | A minimal multimodal identity without machine paths |
+| MoE mixed precision | [`qwen_moe_nvfp4_example.yaml`](../../config/models/qwen_moe_nvfp4_example.yaml) | Backend-specific mixed-precision handling and distinct derived identities |
 | GGUF model | [`llama_gguf_example.yaml`](../../config/models/llama_gguf_example.yaml) | A distinct model family and llama.cpp-specific loading parameters |
 
 These files are examples of catalog structure. Availability and validation
 remain machine-specific; consult `eval-manager check` and the
 [compatibility matrix](../compatibility.md).
+
+For a serial multi-model launch/evaluation example, see
+[`smoke_bbh_multi_model.yaml`](../../config/evaluations/smoke_bbh_multi_model.yaml).
+It starts, evaluates, and cleans up one managed Backend at a time and continues
+to the next model after an individual failure.
 
 ## Minimal declaration
 

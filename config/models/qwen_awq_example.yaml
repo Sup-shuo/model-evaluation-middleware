@@ -1,0 +1,26 @@
+schema_version: "1.0"
+
+id: qwen-awq-example
+label: Example Qwen3.5 AWQ model
+
+source:
+  type: hf
+  ref: cyankiwi/Qwen3.5-4B-AWQ-4bit
+
+architecture: qwen3_5
+quantization: compressed-tensors
+format: safetensors
+context_length: 262144
+
+backends:
+  vllm:
+    max_model_len: 4096
+
+provenance:
+  policy: migration
+
+metadata:
+  quantization_bits: 4
+  quantization_group_size: 32
+  quantization_symmetric: true
+  compatibility_note: Device-specific compressed-tensors kernels may require another group size or a separately materialized BF16 derivative.

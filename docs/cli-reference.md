@@ -9,7 +9,8 @@ omitted.
 
 | Command | Purpose |
 |---|---|
-| `eval-manager init [path] --hardware <type>` | Create a minimal project without overwriting existing files |
+| `eval-manager init [path] --guided` | Prompt for the minimum vLLM + lm-eval project values; never installs or downloads |
+| `eval-manager init [path] --hardware <type> ...` | Create the same project non-interactively without overwriting existing files |
 | `eval-manager config list [--kind ...]` | List System, Model, and Evaluation catalog entries |
 | `eval-manager config show <kind> <reference>` | Display one stored configuration document |
 | `eval-manager config check` | Validate the catalog and optional System/Evaluation pair |
@@ -34,9 +35,15 @@ automation.
 
 | Command | Purpose |
 |---|---|
+| `eval-manager evaluate [--smoke]` | Beginner workflow: preflight, managed inference/evaluation, cleanup, and TXT/SVG results |
 | `eval-manager plan ... -o <plan.json>` | Resolve user configuration or a RunSpec into a frozen plan |
-| `eval-manager run ...` | Resolve user configuration and execute it directly |
+| `eval-manager run ...` | Lower-level execution without the combined beginner preflight |
 | `eval-manager run-plan <plan.json>` | Execute a saved ExecutionPlan or MatrixPlan without re-resolving configuration |
+
+`evaluate` uses `config/system.yaml` and `config/evaluation.yaml` by default,
+accepts `--system-config`, `--evaluation-config`, `--results-root`, and
+`--cache-root`, and always renders TXT/SVG for successful runs. It exits before
+service startup if the combined preflight fails.
 
 `run` and `run-plan` accept `--results-root` and `--cache-root` overrides.
 `run-plan` also supports `--resume-dir` and `--continue-on-error` when its input

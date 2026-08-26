@@ -32,12 +32,13 @@ class PublicExampleTests(unittest.TestCase):
             self.assertTrue(evaluation["backend"].get("profile"), path.name)
             self.assertTrue(evaluation["evaluator"].get("profile"), path.name)
 
-    def test_examples_cover_two_models_and_multiple_execution_stacks(self):
+    def test_examples_cover_multiple_models_and_execution_stacks(self):
         app = Application(PACKAGE_ROOT, ROOT)
         cases = [
             ("nvidia", "smoke_bbh_08b", "qwen-example", "nvidia", "vllm"),
             ("mlu", "smoke_bbh_08b", "qwen-example", "mlu", "vllm"),
             ("metax", "smoke_bbh_08b", "qwen-example", "metax", "vllm"),
+            ("nvidia", "smoke_bbh_awq", "qwen-awq-example", "nvidia", "vllm"),
             (
                 "cpu_llama_cpp",
                 "smoke_bbh_llama_cpp",
@@ -61,9 +62,22 @@ class PublicExampleTests(unittest.TestCase):
             seen_hardware.add(hardware)
             seen_backends.add(backend)
 
-        self.assertGreaterEqual(len(seen_models), 2)
+        self.assertGreaterEqual(len(seen_models), 3)
         self.assertGreaterEqual(len(seen_hardware), 3)
         self.assertGreaterEqual(len(seen_backends), 2)
+
+    def test_multi_model_batch_example_is_serial_and_continues(self):
+        app = Application(PACKAGE_ROOT, ROOT)
+        bundle = app.load_user_config(
+            ROOT / "config" / "systems" / "nvidia.yaml",
+            ROOT / "config" / "evaluations" / "smoke_bbh_multi_model.yaml",
+        )
+        self.assertEqual(
+            bundle.evaluation["models"],
+            ["qwen-example", "qwen-awq-example", "qwen-vl-awq-example"],
+        )
+        self.assertEqual(bundle.evaluation["execution"]["mode"], "serial")
+        self.assertTrue(bundle.evaluation["execution"]["continue_on_error"])
 
     def test_models_do_not_own_machine_paths_or_capacity(self):
         app = Application(PACKAGE_ROOT, ROOT)

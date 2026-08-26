@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Added a guided beginner path: `init --guided` collects the minimum
+  vLLM + lm-eval project values, while `evaluate` runs preflight, managed
+  inference/evaluation, cleanup, and TXT/SVG result rendering through the
+  existing Adapter and Orchestrator contracts.
+- Split CLI argument construction from command dispatch so the beginner
+  workflow does not enlarge the central CLI module.
+- Added device-owned vLLM quantization constraints and fail-fast MetaX
+  compressed-tensors group-size checks before service startup.
+- Added explicit manual conversion support for supported mixed-precision Qwen
+  compressed-tensors checkpoints; conversion remains outside evaluation runs.
+- Hardened local JSON Schema reference resolution across supported
+  `jsonschema` releases without remote schema access.
+
 - Added a real NVIDIA A100 existing-service EvalScope 1.10.0 GSM8K smoke,
   corrected the native `mean_acc` mapping, and made the Binding pass the declared
   benchmark split and few-shot count explicitly to EvalScope.

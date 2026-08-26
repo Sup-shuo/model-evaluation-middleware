@@ -29,12 +29,124 @@ class PreflightFailure(RuntimeError):
         self.details = details or {}
 
 
-def _engine_config(payload: dict):
-    from vllm.engine.arg_utils import EngineArgs
-    from vllm.platforms import current_platform
+def _normalized_quantization(value: object) -> str:
+    return str(value or "").strip().lower().replace("_", "-")
 
+
+def _group_sizes(value: object) -> list[int]:
+    found: set[int] = set()
+
+    def visit(node: object) -> None:
+        if isinstance(node, dict):
+            for key, item in node.items():
+                if key == "group_size" and isinstance(item, (int, str)):
+                    try:
+                        size = int(item)
+                    except ValueError:
+                        continue
+                    if size > 0:
+                        found.add(size)
+                else:
+                    visit(item)
+        elif isinstance(node, list):
+            for item in node:
+                visit(item)
+
+    visit(value)
+    return sorted(found)
+
+
+def _local_quantization_metadata(
+    model_path: str,
+) -> tuple[str | None, list[int], Path]:
+    config_path = Path(model_path).resolve() / "config.json"
+    try:
+        document = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None, [], config_path
+    if not isinstance(document, dict):
+        return None, [], config_path
+    quantization = document.get("quantization_config")
+    if not isinstance(quantization, dict):
+        return None, [], config_path
+    method = _normalized_quantization(
+        quantization.get("quant_method") or quantization.get("format")
+    )
+    return method or None, _group_sizes(quantization), config_path
+
+
+def _enforce_quantization_constraints(
+    payload: dict,
+    *,
+    quantization: object,
+    group_sizes: list[int],
+    config_path: Path,
+) -> None:
+    constraints = payload.get("quantization_constraints")
+    if not isinstance(constraints, dict):
+        return
+    method = _normalized_quantization(quantization)
+    rule = next(
+        (
+            value
+            for key, value in constraints.items()
+            if _normalized_quantization(key) == method and isinstance(value, dict)
+        ),
+        None,
+    )
+    if not rule:
+        return
+    supported = sorted(
+        {
+            int(value)
+            for value in rule.get("supported_group_sizes", [])
+            if isinstance(value, int) and value > 0
+        }
+    )
+    unsupported = sorted(set(group_sizes) - set(supported))
+    if not supported or not unsupported:
+        return
+
+    reason = str(
+        rule.get("reason")
+        or "the selected device/backend combination does not support this quantization layout"
+    )
+    recommendation = str(rule.get("recommendation") or "").strip()
+    message = (
+        f"{reason}; model declares group_size={unsupported}, "
+        f"supported_group_sizes={supported}"
+    )
+    if recommendation:
+        message += f"; recommendation: {recommendation}"
+    raise PreflightFailure(
+        "MODEL_QUANTIZATION_INCOMPATIBLE",
+        message,
+        details={
+            "device_vendor": payload.get("device_vendor"),
+            "quantization": method,
+            "model_group_sizes": group_sizes,
+            "supported_group_sizes": supported,
+            "model_config": str(config_path),
+            "recommendation": recommendation or None,
+        },
+    )
+
+
+def _engine_config(payload: dict):
     model_path = str(payload["model_path"])
     declared_quantization = str(payload.get("quantization") or "").strip().lower()
+    config_quantization, config_group_sizes, config_path = (
+        _local_quantization_metadata(model_path)
+    )
+    _enforce_quantization_constraints(
+        payload,
+        quantization=config_quantization or declared_quantization,
+        group_sizes=config_group_sizes,
+        config_path=config_path,
+    )
+
+    from vllm.engine.arg_utils import EngineArgs
+    from vllm.platforms import current_platform
     configured_dtype = str(payload.get("dtype") or "auto").strip().lower()
     if configured_dtype == "auto" and declared_quantization in _DTYPES:
         configured_dtype = _DTYPES[declared_quantization]
@@ -86,6 +198,14 @@ def _engine_config(payload: dict):
             },
         )
     hf_config = getattr(model, "hf_config", None)
+    _enforce_quantization_constraints(
+        payload,
+        quantization=(
+            resolved_quantization or config_quantization or declared_quantization
+        ),
+        group_sizes=config_group_sizes,
+        config_path=config_path,
+    )
     versions: dict[str, str] = {}
     for distribution in ("vllm", "torch", "transformers"):
         try:
@@ -104,6 +224,7 @@ def _engine_config(payload: dict):
         "model_type": getattr(hf_config, "model_type", None),
         "quantization": resolved_quantization,
         "declared_quantization": declared_quantization or None,
+        "quantization_group_sizes": config_group_sizes,
         "dtype": str(getattr(model, "dtype", None)),
         "max_model_len": int(getattr(model, "max_model_len")),
         "tensor_parallel_size": int(payload.get("tensor_parallel_size", 1)),

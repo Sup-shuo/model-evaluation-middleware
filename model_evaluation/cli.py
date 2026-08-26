@@ -1,7 +1,7 @@
 """Stable console-script entry point.
 
-The parser and command dispatch live in ``commands.cli_app`` so the installed
-entry point remains small while command groups can evolve independently.
+Argument construction lives in ``commands.parser`` and command dispatch in
+``commands.cli_app`` so the installed entry point stays small and stable.
 """
 
 from model_evaluation.commands.cli_app import (

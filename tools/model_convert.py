@@ -29,6 +29,7 @@ class Route:
     description: str
     architectures: tuple[str, ...]
     quantization_method: str | None
+    quantization_formats: tuple[str, ...] = ()
     contract_required: bool = False
     independent_verifier: bool = False
 
@@ -48,7 +49,22 @@ ROUTES = {
                 "Qwen3VLForConditionalGeneration",
             ),
             quantization_method="compressed-tensors",
+            quantization_formats=("pack-quantized",),
             independent_verifier=True,
+        ),
+        Route(
+            name="compressed-tensors-mixed-to-bf16",
+            script="convert_ct_mixed_qwen_to_dense_bf16.py",
+            description=(
+                "Dequantize supported Qwen compressed-tensors mixed-precision "
+                "NVFP4/FP8 weights to a separate dense BF16 checkpoint."
+            ),
+            architectures=(
+                "Qwen3_5ForConditionalGeneration",
+                "Qwen3_5MoeForConditionalGeneration",
+            ),
+            quantization_method="compressed-tensors",
+            quantization_formats=("mixed-precision",),
         ),
         Route(
             name="awq-to-bf16",
@@ -69,6 +85,7 @@ ROUTES = {
             ),
             architectures=("Qwen3_5ForConditionalGeneration",),
             quantization_method="compressed-tensors",
+            quantization_formats=("pack-quantized",),
             contract_required=True,
         ),
         Route(
@@ -204,6 +221,7 @@ def inspect_checkpoint(source: Path) -> dict[str, Any]:
     if not isinstance(quantization, dict):
         quantization = {}
     quantization_method = quantization.get("quant_method")
+    quantization_format = quantization.get("format")
 
     compatible_routes = []
     for route in ROUTES.values():
@@ -213,7 +231,11 @@ def inspect_checkpoint(source: Path) -> dict[str, Any]:
             if route.quantization_method is not None
             else not quantization
         )
-        if architecture_ok and quantization_ok:
+        format_ok = (
+            not route.quantization_formats
+            or quantization_format in route.quantization_formats
+        )
+        if architecture_ok and quantization_ok and format_ok:
             compatible_routes.append(route.name)
 
     return {
@@ -235,6 +257,7 @@ def inspect_checkpoint(source: Path) -> dict[str, Any]:
 def validate_route(route: Route, inspection: dict[str, Any]) -> None:
     architecture = inspection["architecture"]
     quantization_method = inspection["quantization"].get("quant_method")
+    quantization_format = inspection["quantization"].get("format")
     if architecture not in route.architectures:
         raise ValueError(
             f"route {route.name!r} does not support architecture {architecture!r}"
@@ -249,6 +272,11 @@ def validate_route(route: Route, inspection: dict[str, Any]) -> None:
         raise ValueError(
             f"route {route.name!r} requires quantization_method="
             f"{route.quantization_method!r}, found {quantization_method!r}"
+        )
+    if route.quantization_formats and quantization_format not in route.quantization_formats:
+        raise ValueError(
+            f"route {route.name!r} requires quantization format in "
+            f"{route.quantization_formats!r}, found {quantization_format!r}"
         )
 
 
@@ -267,6 +295,7 @@ def route_payload(route: Route) -> dict[str, Any]:
         "description": route.description,
         "architectures": list(route.architectures),
         "quantization_method": route.quantization_method,
+        "quantization_formats": list(route.quantization_formats),
         "contract_required": route.contract_required,
         "independent_verifier": route.independent_verifier,
     }

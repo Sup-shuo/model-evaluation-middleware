@@ -8,13 +8,15 @@ from pathlib import Path
 
 from model_evaluation import package_root
 from model_evaluation.commands.adapters import check_adapter_root
+from model_evaluation.commands.evaluate import run_automatic_evaluation
 from model_evaluation.commands.doctor import (
     EVALUATOR_DOCTOR_RPC_TIMEOUT_SECONDS,
     run_doctor,
 )
 from model_evaluation.commands.render import render_inspection
 from model_evaluation.commands.workflow import run_check
-from model_evaluation.commands.configuration import add_config_commands, handle_config_command
+from model_evaluation.commands.configuration import handle_config_command
+from model_evaluation.commands.parser import add_user_config_args, build_parser
 from model_evaluation.core.app import Application
 from model_evaluation.core.config.deployment import resolve_deployment_profile
 from model_evaluation.core.config.evaluation import resolve_evaluation_profile
@@ -41,30 +43,6 @@ def doctor_dump(obj, orchestrator) -> None:
     dump(redact_diagnostic(obj, orchestrator.pm.secrets.redaction_values()))
 
 
-def add_user_config_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--system-config",
-        default=None,
-        help=(
-            "机器配置路径或 config/systems/ 下的 ID；默认 "
-            "MODEL_EVAL_SYSTEM_CONFIG 或 config/system.yaml"
-        ),
-    )
-    parser.add_argument(
-        "--evaluation-config",
-        default=None,
-        help=(
-            "评测配置路径或 config/evaluations/ 下的 ID；默认 "
-            "MODEL_EVAL_EVALUATION_CONFIG 或 config/evaluation.yaml"
-        ),
-    )
-    parser.add_argument(
-        "--smoke",
-        action="store_true",
-        help="临时启用标准 Smoke 模式：每个任务只评测 1 个样本，不修改 YAML",
-    )
-
-
 def _project_root() -> Path:
     configured = os.environ.get("MODEL_EVAL_PROJECT_ROOT")
     if configured:
@@ -72,189 +50,67 @@ def _project_root() -> Path:
     return Path.cwd().resolve()
 
 
-def _add_execution_overrides(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--results-root")
-    parser.add_argument("--cache-root")
+def _prompt_value(label: str, default: str | None = None) -> str:
+    suffix = f" [{default}]" if default is not None else ""
+    try:
+        value = input(f"{label}{suffix}: ").strip()
+    except EOFError as exc:
+        raise ConfigError("guided init requires an interactive terminal") from exc
+    selected = value or (default or "")
+    if not selected:
+        raise ConfigError(f"guided init requires a value for {label}")
+    return selected
 
 
-def _add_resume_args(parser: argparse.ArgumentParser) -> None:
-    _add_execution_overrides(parser)
-    parser.add_argument(
-        "--continue-on-error",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-    )
-    parser.add_argument("--resume-dir")
-
-
-def _add_render_summary_arg(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--render-summary",
-        action="store_true",
-        help=(
-            "为每个成功 run 生成 result-summary.txt 和 "
-            "result-summary.svg；正式 JSON 结果保持不变"
+def _guided_init_values(args: argparse.Namespace) -> dict[str, str]:
+    choices = ", ".join(sorted(HARDWARE_TEMPLATES))
+    hardware = _prompt_value(f"Hardware ({choices})", args.hardware)
+    if hardware not in HARDWARE_TEMPLATES:
+        raise ConfigError(f"unsupported onboarding hardware template: {hardware}")
+    return {
+        "hardware": hardware,
+        "model_id": _prompt_value("Model ID", args.model_id),
+        "models_root": _prompt_value("Models root", args.models_root),
+        "model_ref": _prompt_value("Model path relative to models root"),
+        "evaluator_root": _prompt_value("lm-evaluation-harness checkout"),
+        "cache_root": _prompt_value("Dataset/cache directory", "cache"),
+        "results_root": _prompt_value("Results directory", args.results_root),
+        "benchmark": _prompt_value("Benchmark", args.benchmark),
+        "backend_executable": _prompt_value(
+            "Inference executable", args.backend_executable
         ),
-    )
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="eval-manager",
-        description="模型评测适配中间层 v4.1",
-    )
-    commands = parser.add_subparsers(dest="cmd", required=True)
-
-    add_config_commands(commands)
-
-    init_parser = commands.add_parser(
-        "init",
-        help="创建最小 System/Model/Evaluation 工程骨架；不覆盖现有文件",
-    )
-    init_parser.add_argument("path", nargs="?", default=".")
-    init_parser.add_argument(
-        "--hardware",
-        choices=sorted(HARDWARE_TEMPLATES),
-        default="nvidia",
-    )
-
-    snapshot = commands.add_parser(
-        "environment-snapshot",
-        help="导出运行 Core 的 Python 环境和可选 requirements lock",
-    )
-    snapshot.add_argument("-o", "--output")
-    snapshot.add_argument("--requirements-lock")
-
-    commands.add_parser("schema-check")
-    commands.add_parser("adapters")
-
-    demo = commands.add_parser(
-        "demo",
-        help="运行无需 GPU/NPU 的 reference E2E，并输出最终 JSON 报告",
-    )
-    demo.add_argument("--results-root")
-    demo.add_argument("--cache-root")
-    _add_render_summary_arg(demo)
-
-    adapter_check = commands.add_parser(
-        "adapter-check",
-        help="验证一个外部 Adapter root 的目录、Manifest 与协议版本",
-    )
-    adapter_check.add_argument("root")
-
-    result_check = commands.add_parser(
-        "result-check",
-        help="验证最终结果 Schema、跨文件一致性与产物路径",
-    )
-    result_check.add_argument("run_dir", help="单次 run 或 Matrix batch 结果目录")
-
-    inspect_parser = commands.add_parser(
-        "inspect",
-        help="验证并展示一个完成的结果目录",
-    )
-    inspect_parser.add_argument("run_dir")
-    inspect_parser.add_argument("--format", choices=("human", "json"), default="human")
-
-    validate = commands.add_parser(
-        "validate",
-        help="不带参数时验证 config/system.yaml + config/evaluation.yaml",
-    )
-    validate.add_argument("run", nargs="?")
-    add_user_config_args(validate)
-
-    doctor = commands.add_parser(
-        "doctor",
-        help="检查当前机器、所选环境与评测框架是否具备本地运行条件（不启动模型服务）",
-    )
-    add_user_config_args(doctor)
-    doctor.add_argument("--format", choices=("human", "json"), default="human")
-
-    check = commands.add_parser(
-        "check",
-        help="组合 validate、doctor、plan preview 与只读资源检查（不启动模型服务）",
-    )
-    add_user_config_args(check)
-    check.add_argument("--format", choices=("human", "json"), default="human")
-
-    explain = commands.add_parser(
-        "explain",
-        help="解释所选模型、后端与机器组合为何可运行或被阻止",
-    )
-    add_user_config_args(explain)
-    explain.add_argument("--format", choices=("human", "json"), default="human")
-
-    plan = commands.add_parser(
-        "plan",
-        help="不带 RunSpec 时从两份用户配置生成批量计划",
-    )
-    plan.add_argument("run", nargs="?")
-    plan.add_argument("-o", "--output")
-    add_user_config_args(plan)
-
-    run = commands.add_parser(
-        "run",
-        help="不带 RunSpec 时直接运行 config/evaluation.yaml",
-    )
-    run.add_argument("run", nargs="?")
-    _add_execution_overrides(run)
-    add_user_config_args(run)
-    _add_render_summary_arg(run)
-
-    run_plan = commands.add_parser("run-plan")
-    run_plan.add_argument("plan")
-    _add_resume_args(run_plan)
-    _add_render_summary_arg(run_plan)
-
-    matrix_validate = commands.add_parser("matrix-validate")
-    matrix_validate.add_argument("matrix")
-
-    matrix_expand = commands.add_parser("matrix-expand")
-    matrix_expand.add_argument("matrix")
-    matrix_expand.add_argument("-o", "--output")
-
-    matrix_plan = commands.add_parser("matrix-plan")
-    matrix_plan.add_argument("matrix")
-    matrix_plan.add_argument("-o", "--output")
-
-    matrix_export = commands.add_parser(
-        "matrix-export",
-        help="把已保存的 Matrix plan 分片为调度器无关的 execution-plan bundle",
-    )
-    matrix_export.add_argument("plan")
-    matrix_export.add_argument("-o", "--output", required=True)
-    matrix_export.add_argument("--shards", type=int, default=1)
-    matrix_export.add_argument(
-        "--strategy",
-        choices=("resource_balanced", "round_robin"),
-        default="resource_balanced",
-        help="按逻辑加速卡需求均衡分片，或保留简单轮询",
-    )
-
-    matrix_run = commands.add_parser("matrix-run")
-    matrix_run.add_argument("matrix")
-    _add_execution_overrides(matrix_run)
-    matrix_run.add_argument(
-        "--continue-on-error",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-    )
-    _add_render_summary_arg(matrix_run)
-
-    saved_matrix = commands.add_parser("run-matrix-plan")
-    saved_matrix.add_argument("plan")
-    _add_resume_args(saved_matrix)
-    _add_render_summary_arg(saved_matrix)
-    return parser
+    }
 
 
 def _handle_bootstrap(args: argparse.Namespace) -> bool:
     if args.cmd == "init":
-        created = initialize_project(args.path, hardware=args.hardware)
+        values = (
+            _guided_init_values(args)
+            if args.guided
+            else {
+                "hardware": args.hardware,
+                "model_id": args.model_id,
+                "model_ref": args.model_ref,
+                "models_root": args.models_root,
+                "evaluator_root": args.lm_eval_root,
+                "cache_root": args.cache_root,
+                "results_root": args.results_root,
+                "benchmark": args.benchmark,
+                "backend_executable": args.backend_executable,
+            }
+        )
+        created = initialize_project(args.path, **values)
+        project_root = Path(args.path).expanduser().resolve()
         dump(
             {
                 "ok": True,
-                "root": str(Path(args.path).expanduser().resolve()),
+                "root": str(project_root),
                 "created": [str(path) for path in created],
+                "next_steps": [
+                    f"cd {project_root}",
+                    "eval-manager evaluate --smoke",
+                    "eval-manager evaluate",
+                ],
             }
         )
         return True
@@ -606,6 +462,18 @@ def _main() -> None:
             smoke=args.smoke,
         )
         raise SystemExit(0 if ok else 2)
+    if args.cmd == "evaluate":
+        raise SystemExit(
+            run_automatic_evaluation(
+                app,
+                system_config=args.system_config,
+                evaluation_config=args.evaluation_config,
+                results_root=args.results_root,
+                cache_root=args.cache_root,
+                smoke=args.smoke,
+                output_format=args.format,
+            )
+        )
     if _handle_plan_or_run(args, app):
         return
     if _handle_matrix(args, app):

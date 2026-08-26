@@ -88,36 +88,36 @@ Full environment records and commands are available for
 [Cambricon MLU](docs/validation/cambricon-mlu.md), and
 [MetaX C500](docs/validation/metax-c500.md).
 
-## First real evaluation
+## Beginner path: one managed evaluation
 
-For a source checkout:
+Install the Controller, then let the guided initializer create the three user
+configuration files:
 
 ```bash
 python -m pip install -e .
-eval-manager schema-check
-eval-manager adapters
+eval-manager init my-evaluation --guided
+cd my-evaluation
 ```
 
-Create a project skeleton, fill in its machine paths, and run the combined
-read-only check before execution:
+After the prompts point to an installed inference engine, evaluation framework,
+and local model, the beginner command owns the complete run workflow:
 
 ```bash
-eval-manager init my-evaluation --hardware nvidia
-cd my-evaluation
+# First verify the connection with one sample per task.
+eval-manager evaluate --smoke
 
-eval-manager check \
-  --system-config config/system.yaml \
-  --evaluation-config config/evaluation.yaml
-
-eval-manager run \
-  --system-config config/system.yaml \
-  --evaluation-config config/evaluation.yaml \
-  --render-summary
+# Then run the complete configured evaluation.
+eval-manager evaluate
 ```
 
-The [installation guide](docs/installation.md) continues from here with
-Controller, inference environment, evaluation environment, hardware, model,
-benchmark, execution, and result inspection.
+`evaluate` performs validation, environment and compatibility checks, plan and
+resource preview, managed inference startup or attachment, evaluation, result
+publication, owned-process cleanup, and TXT/SVG summary generation. If preflight
+fails, it explains the blocking layer and does not start the inference service.
+
+The [installation guide](docs/installation.md) explains each prompt and the
+equivalent non-interactive configuration. Advanced users can continue to use
+`check`, `plan`, `run`, `run-plan`, and Matrix commands independently.
 
 ## Three user configuration types
 

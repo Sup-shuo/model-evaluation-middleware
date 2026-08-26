@@ -1,9 +1,9 @@
 # Documentation
 
-Use the shortest path that matches your goal. The pages are intentionally
-layered: the installation guide produces a working run, configuration pages
-explain user-owned YAML, component pages describe integrations, and Adapter
-pages define extension work.
+Use the shortest path that matches your goal. New users can finish the guided
+`init --guided` and `evaluate --smoke` path in the installation guide before
+reading any protocol document. Configuration pages explain user-owned YAML,
+component pages describe integrations, and Adapter pages define extension work.
 
 ## Use the project
 

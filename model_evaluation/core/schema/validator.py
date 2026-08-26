@@ -24,9 +24,35 @@ class SchemaStore:
             self._cache[filename] = json_loads_strict(path.read_text(encoding="utf-8"))
         return self._cache[filename]
 
+    def _resolver_store(self) -> dict[str, dict]:
+        """Preload package schemas under canonical and legacy resolution scopes.
+
+        Supported jsonschema releases differ in how nested relative $id values
+        update RefResolver scopes.  Keeping the small package schema set in an
+        explicit store prevents filesystem or network fallback in every scope.
+        """
+        store: dict[str, dict] = {}
+        resolution_roots = (self.root, *self.root.parents)
+        for path in self.root.glob("*.schema.json"):
+            document = self.load(path.name)
+            for root in resolution_roots:
+                store[(root / path.name).as_uri()] = document
+            declared_id = document.get("$id")
+            if isinstance(declared_id, str) and declared_id:
+                store[declared_id] = document
+        return store
+
+    def _resolver(self, filename: str, schema: dict) -> RefResolver:
+        return RefResolver(
+            base_uri=(self.root / filename).as_uri(),
+            referrer=schema,
+            store=self._resolver_store(),
+        )
+
     def validate(self, name: str, value: object) -> None:
         schema = self.load(name)
-        resolver = RefResolver(base_uri=self.root.as_uri() + "/", referrer=schema)
+        filename = name if name.endswith(".schema.json") else f"{name}.schema.json"
+        resolver = self._resolver(filename, schema)
         validator = Draft202012Validator(schema, resolver=resolver, format_checker=contract_format_checker())
         errors = sorted(validator.iter_errors(value), key=lambda e: list(e.absolute_path))
         if errors:
@@ -40,7 +66,8 @@ class SchemaStore:
         defs = schema.get("$defs") or {}
         if def_name not in defs:
             raise SchemaValidationError(f"schema definition not found: {name}#/$defs/{def_name}")
-        resolver = RefResolver(base_uri=self.root.as_uri() + "/", referrer=schema)
+        filename = name if name.endswith(".schema.json") else f"{name}.schema.json"
+        resolver = self._resolver(filename, schema)
         validator = Draft202012Validator(defs[def_name], resolver=resolver, format_checker=contract_format_checker())
         errors = sorted(validator.iter_errors(value), key=lambda e: list(e.absolute_path))
         if errors:

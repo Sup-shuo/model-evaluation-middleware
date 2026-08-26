@@ -1,0 +1,19 @@
+schema_version: "1.0"
+
+id: qwen-vl-awq-example
+label: Example Qwen3-VL AWQ model
+
+source:
+  type: hf
+  ref: cyankiwi/Qwen3-VL-8B-Instruct-AWQ-4bit
+
+backends:
+  vllm:
+    max_model_len: 4096
+
+provenance:
+  policy: migration
+
+metadata:
+  modality: vision-language
+  compatibility_note: Confirm multimodal and quantization support in the selected Backend before execution.

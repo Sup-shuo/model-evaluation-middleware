@@ -24,18 +24,18 @@ class MatrixSchemas:
         """Preload package schemas so validation never performs remote I/O.
 
         ``jsonschema.RefResolver`` applies nested relative ``$id`` scopes
-        differently across supported jsonschema releases. Register both the
-        canonical schema URI and its legacy shadow URI while the project still
+        differently across supported jsonschema releases. Register the
+        canonical schema URI and legacy ancestor shadow URIs while the project still
         supports RefResolver.
         """
 
         protocol_root = self.root.parent
-        shadow_root = protocol_root.parent
+        resolution_roots = (protocol_root, *protocol_root.parents)
         store: dict[str, dict] = {}
         for path in protocol_root.glob("*.schema.json"):
             document = load_json_strict(path.read_text(encoding="utf-8"))
-            store[path.as_uri()] = document
-            store[(shadow_root / path.name).as_uri()] = document
+            for root in resolution_roots:
+                store[(root / path.name).as_uri()] = document
         for path in self.root.glob("*.schema.json"):
             document = load_json_strict(path.read_text(encoding="utf-8"))
             store[path.as_uri()] = document

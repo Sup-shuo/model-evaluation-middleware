@@ -247,6 +247,8 @@ def check_installable_bundle(root: Path) -> None:
         installed = extracted / "model_evaluation"
         required = [
             installed / "cli.py",
+            installed / "commands" / "evaluate.py",
+            installed / "commands" / "parser.py",
             installed / "VERSION.txt",
             installed / "core" / "app.py",
             installed / "core" / "matrix_export.py",

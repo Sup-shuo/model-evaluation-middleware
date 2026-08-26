@@ -29,6 +29,30 @@ class CliResultReportTests(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertTrue(parser.parse_args([command, "--smoke"]).smoke)
 
+    def test_automatic_evaluate_command_is_beginner_focused(self):
+        parser = build_parser()
+        args = parser.parse_args(["evaluate", "--smoke", "--format", "json"])
+        self.assertEqual(args.cmd, "evaluate")
+        self.assertTrue(args.smoke)
+        self.assertEqual(args.format, "json")
+
+    def test_guided_init_options_are_available(self):
+        parser = build_parser()
+        args = parser.parse_args(
+            [
+                "init",
+                "project",
+                "--guided",
+                "--hardware",
+                "mlu",
+                "--model-id",
+                "org/model",
+            ]
+        )
+        self.assertTrue(args.guided)
+        self.assertEqual(args.hardware, "mlu")
+        self.assertEqual(args.model_id, "org/model")
+
     def test_batch_renderer_only_processes_successful_runs(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

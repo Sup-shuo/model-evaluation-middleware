@@ -79,34 +79,32 @@ eval-manager demo --render-summary
 [Cambricon MLU](validation/cambricon-mlu.md) 和
 [MetaX C500](validation/metax-c500.md) 的脱敏记录。
 
-## 第一次真实评测
+## 小白入口：一条命令完成托管评测
 
-源码目录安装：
+安装 Controller 后，用引导初始化生成三类用户配置：
 
 ```bash
 python -m pip install -e .
-eval-manager schema-check
-eval-manager adapters
+eval-manager init my-evaluation --guided
+cd my-evaluation
 ```
 
-创建工程骨架、补全机器路径，运行只读检查后再执行：
+按提示填写已经安装好的推理框架、评测框架和本地模型路径，然后执行：
 
 ```bash
-eval-manager init my-evaluation --hardware nvidia
-cd my-evaluation
+# 首次连接先做每个任务 1 个样本的 smoke。
+eval-manager evaluate --smoke
 
-eval-manager check \
-  --system-config config/system.yaml \
-  --evaluation-config config/evaluation.yaml
-
-eval-manager run \
-  --system-config config/system.yaml \
-  --evaluation-config config/evaluation.yaml \
-  --render-summary
+# 确认无误后执行配置中的完整评测。
+eval-manager evaluate
 ```
 
-[安装指南](installation.md)会继续说明 Controller、推理环境、评测环境、硬件、模型、
-benchmark、执行与结果检查的完整流程。
+`evaluate` 会依次完成配置校验、环境与兼容性检查、计划与资源预览、推理服务启动或连接、
+评测执行、结果保存、所属进程清理，并默认生成 TXT/SVG。预检失败时会指出阻塞层级，
+且不会启动推理服务。
+
+[安装指南](installation.md)会逐项解释初始化提示和非交互配置方式。熟悉项目后仍可独立使用
+`check`、`plan`、`run`、`run-plan` 和 Matrix 命令。
 
 ## 三类用户配置
 

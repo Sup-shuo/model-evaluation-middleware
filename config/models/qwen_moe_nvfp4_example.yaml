@@ -1,0 +1,25 @@
+schema_version: "1.0"
+
+id: qwen-moe-nvfp4-example
+label: Example Qwen MoE mixed-precision model
+
+source:
+  type: local
+  ref: unsloth/Qwen3.6-35B-A3B-NVFP4
+
+architecture: qwen3_5_moe
+quantization: compressed-tensors
+format: safetensors
+context_length: 262144
+
+backends:
+  vllm:
+    max_model_len: 4096
+    dtype: bfloat16
+
+provenance:
+  policy: migration
+
+metadata:
+  quantization_bits: 4
+  compatibility_note: Mixed NVFP4/FP8 execution is Backend-specific; use a distinct derived model identity when manual conversion is required.

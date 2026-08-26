@@ -1,0 +1,38 @@
+schema_version: "1.3"
+
+# Multi-model batch example. Core starts, evaluates, and cleans up one managed
+# Backend at a time; this is a serial batch, not concurrent service deployment.
+models:
+  - qwen-example
+  - qwen-awq-example
+  - qwen-vl-awq-example
+
+benchmarks: [bbh]
+
+backend:
+  profile: vllm
+  parameters:
+    seed: 1234
+    pythonhashseed: 1234
+
+evaluator:
+  profile: lm_eval
+  parameters:
+    batch_size: 1
+    num_concurrent: 1
+    limit: 1
+    log_samples: true
+    random_seed: 0
+    numpy_random_seed: 1234
+    torch_random_seed: 1234
+    fewshot_random_seed: 1234
+    request_seed: 1234
+    pythonhashseed: 1234
+    evaluation_timeout_seconds: 1800
+    preflight_timeout_seconds: 600
+
+offline: true
+
+execution:
+  mode: serial
+  continue_on_error: true

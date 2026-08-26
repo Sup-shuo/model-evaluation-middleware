@@ -79,14 +79,38 @@ See [Environment isolation](configuration/environments.md) and
 
 ## 5. Create the user configuration
 
+The guided path asks only for hardware, model identity and location, the
+lm-evaluation-harness checkout, cache/results paths, benchmark, and inference
+executable:
+
 ```bash
-eval-manager init my-evaluation --hardware nvidia
+eval-manager init my-evaluation --guided
 cd my-evaluation
 ```
 
-`--hardware` also accepts `mlu`, `metax`, `amd`, `ascend`, and `cpu`. The command
-does not overwrite existing files. Replace every generated `REPLACE_WITH_*`
-value, then configure these three documents:
+`--hardware` supports `nvidia`, `mlu`, `metax`, `amd`, `ascend`, and `cpu`.
+The generated common template uses the Controller's current Python environment
+for both Backend and Evaluator. If the real deployment isolates them, edit the
+named environments in System as described in
+[Environment isolation](configuration/environments.md).
+
+For scripts or CI, supply the same values without prompts:
+
+```bash
+eval-manager init my-evaluation \\
+  --hardware mlu \\
+  --model-id qwen35-08b-base \\
+  --models-root /data \\
+  --model-ref Qwen/Qwen3.5-0.8B-Base \\
+  --lm-eval-root /opt/lm-evaluation-harness \\
+  --cache-root /data/lm-eval-cache \\
+  --benchmark bbh \\
+  --backend-executable vllm
+```
+
+Initialization never overwrites existing files. It only writes these three
+documents and a `.gitignore`; it does not install frameworks or obtain model
+material:
 
 | Document | Required decisions | Detailed guide |
 |---|---|---|
@@ -156,34 +180,35 @@ Keep the Evaluation reusable. The CLI `--smoke` flag applies a temporary
 one-sample-per-task limit in the resolved plan without changing this YAML. A
 smoke result must not be reported as a complete score.
 
-## 8. Check before execution
+## 8. Preview or explain without running
+
+The beginner `evaluate` command performs this preflight automatically. Run it
+separately when you want a read-only answer without starting inference:
 
 ```bash
-eval-manager check \
-  --system-config config/system.yaml \
-  --evaluation-config config/evaluation.yaml --smoke
+eval-manager check --smoke
+eval-manager explain --smoke
 ```
 
 `check` performs validation, Doctor, plan preview, and read-only resource checks.
-If it fails, request a human-readable explanation:
+`explain` shows the blocking layer in human-readable form. Resolve missing paths,
+environments, model material, ports, or compatibility requirements before
+running.
+
+## 9. Evaluate and inspect
+
+Start with a smoke, then remove the flag for the complete configured run:
 
 ```bash
-eval-manager explain \
-  --system-config config/system.yaml \
-  --evaluation-config config/evaluation.yaml --smoke
+eval-manager evaluate --smoke
+eval-manager evaluate
 ```
 
-Resolve missing paths, environments, model material, ports, or compatibility
-requirements before running.
-
-## 9. Run and inspect
-
-```bash
-eval-manager run \
-  --system-config config/system.yaml \
-  --evaluation-config config/evaluation.yaml \
-  --smoke --render-summary
-```
+The command stops before inference when preflight fails. When it passes, the
+selected Backend starts or attaches to the inference service, the selected
+Evaluator runs, normalized and native results are saved, owned processes are
+cleaned up, and TXT/SVG summaries are generated. It uses the same Orchestrator
+and Adapter contracts as the lower-level `run` command.
 
 Then validate the final product:
 
@@ -193,8 +218,8 @@ eval-manager inspect results/<run-id>
 eval-manager inspect results/<run-id> --format json
 ```
 
-The optional `result-summary.txt` and `result-summary.svg` project saved data;
-they do not recompute metrics. Continue with the
+The `result-summary.txt` and `result-summary.svg` files project saved data; they
+do not recompute metrics. Continue with the
 [Result product protocol](result-product.md).
 
 ## 10. Reuse the evaluation on another machine
@@ -222,6 +247,7 @@ Use the narrowest command that answers the current question:
 | Are hardware, environments, executables, frameworks, and model files ready? | `eval-manager doctor` |
 | Why is this model/backend/machine combination blocked? | `eval-manager explain` |
 | Is everything ready before service startup? | `eval-manager check` |
+| Can I preflight and run the complete managed workflow in one command? | `eval-manager evaluate --smoke` |
 | Is a completed Run or Batch Result internally consistent? | `eval-manager result-check <path>` |
 
 These checks report the failing layer; they do not download models, convert

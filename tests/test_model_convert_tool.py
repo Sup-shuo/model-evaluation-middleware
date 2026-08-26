@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import subprocess
 import sys
@@ -48,6 +49,7 @@ class ModelConvertToolTests(unittest.TestCase):
         routes = json.loads(completed.stdout)
         names = {route["name"] for route in routes}
         self.assertIn("compressed-tensors-to-bf16", names)
+        self.assertIn("compressed-tensors-mixed-to-bf16", names)
         self.assertIn("awq-to-bf16", names)
 
         with tempfile.TemporaryDirectory() as temporary:
@@ -73,6 +75,95 @@ class ModelConvertToolTests(unittest.TestCase):
                     "compressed-tensors-contract-to-bf16",
                 ],
             )
+
+    def test_mixed_nvfp4_route_is_format_and_architecture_specific(self) -> None:
+        quantization = {
+            "quant_method": "compressed-tensors",
+            "format": "mixed-precision",
+            "config_groups": {
+                "group_0": {"format": "float-quantized"},
+                "group_1": {"format": "nvfp4-pack-quantized"},
+            },
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            dense_source = None
+            for architecture in (
+                "Qwen3_5ForConditionalGeneration",
+                "Qwen3_5MoeForConditionalGeneration",
+            ):
+                case = root / architecture
+                case.mkdir()
+                source = self.checkpoint(
+                    case,
+                    architecture=architecture,
+                    quantization=quantization,
+                )
+                inspected = run_tool("inspect", str(source), "--format", "json")
+                self.assertEqual(inspected.returncode, 0, inspected.stderr)
+                payload = json.loads(inspected.stdout)
+                if architecture == "Qwen3_5ForConditionalGeneration":
+                    dense_source = source
+                self.assertEqual(
+                    payload["compatible_manual_routes"],
+                    ["compressed-tensors-mixed-to-bf16"],
+                )
+
+            output = root / "derived"
+            converted = run_tool(
+                "convert",
+                "--route",
+                "compressed-tensors-mixed-to-bf16",
+                "--source",
+                str(source),
+                "--output",
+                str(output),
+                "--source-ref",
+                "owner/model",
+                "--dry-run",
+            )
+            self.assertEqual(converted.returncode, 0, converted.stderr)
+            command = json.loads(converted.stdout)["command"]
+            self.assertIn("convert_ct_mixed_qwen_to_dense_bf16.py", command[1])
+
+            old_route = run_tool(
+                "convert",
+                "--route",
+                "compressed-tensors-to-bf16",
+                "--source",
+                str(dense_source),
+                "--output",
+                str(output),
+                "--source-ref",
+                "owner/model",
+                "--dry-run",
+            )
+            self.assertEqual(old_route.returncode, 2)
+            self.assertIn("quantization format", old_route.stderr)
+
+    def test_moe_layout_helper_has_complete_return_path(self) -> None:
+        helper = (
+            ROOT
+            / "tools"
+            / "model_conversion"
+            / "qwen35_moe_dense.py"
+        )
+        tree = ast.parse(helper.read_text(encoding="utf-8"), filename=str(helper))
+        functions = {
+            node.name: node
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        self.assertIn("build_qwen35_moe_dense_state", functions)
+        self.assertIn("serialized_expert_parts", functions)
+        builder = functions["build_qwen35_moe_dense_state"]
+        self.assertTrue(
+            any(
+                isinstance(node, ast.Return)
+                and isinstance(node.value, ast.Tuple)
+                for node in ast.walk(builder)
+            )
+        )
 
     def test_convert_dry_run_selects_internal_route_without_writing(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
