@@ -59,8 +59,11 @@ create another result format or reinterpret framework metrics.
 `run-matrix-plan`. When enabled, the CLI writes `result-summary.txt` and
 `result-summary.svg` after each successful run. Failed runs are not rendered.
 These are human-readable projections, not additional protocol documents; they
-do not change or recompute the normalized metrics. Existing successful results
-can be rendered with `scripts/print_result.py`.
+do not change or recompute the normalized metrics. In the beginner `evaluate`
+workflow, a projection write failure becomes a `RESULT_PROJECTION_FAILED`
+warning after formal success and does not change the evaluation outcome or exit
+status. Existing successful results can be rendered with
+`scripts/print_result.py`.
 
 Matrix batches are also public products. `_batches/<batch-id>/summary.json` and
 `runs.json` have dedicated schemas, while the three TSV tables provide summary,

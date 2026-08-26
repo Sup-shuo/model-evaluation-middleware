@@ -99,8 +99,11 @@ eval-manager init my-evaluation --guided
 cd my-evaluation
 ```
 
-After the prompts point to an installed inference engine, evaluation framework,
-and local model, the beginner command owns the complete run workflow:
+The prompts show the selected hardware template's validation level, ask for
+explicit device IDs, and state that the generated vLLM + lm-eval template uses
+the Controller's current Python environment until System is edited. After the
+paths point to installed frameworks and a local model, the beginner command owns
+the complete run workflow:
 
 ```bash
 # First verify the connection with one sample per task.
@@ -112,7 +115,9 @@ eval-manager evaluate
 
 `evaluate` performs validation, environment and compatibility checks, plan and
 resource preview, managed inference startup or attachment, evaluation, result
-publication, owned-process cleanup, and TXT/SVG summary generation. If preflight
+publication, owned-process cleanup, and TXT/SVG summary generation. If optional
+TXT/SVG projection fails after a successful Result Product is published, the
+command reports a warning without changing the evaluation outcome. If preflight
 fails, it explains the blocking layer and does not start the inference service.
 
 The [installation guide](docs/installation.md) explains each prompt and the

@@ -21,8 +21,11 @@ def _load_batch_runs(batch_dir: Path) -> list[dict]:
     return rows
 
 
-def _write_success_reports(rows: list[dict]) -> list[dict[str, str]]:
+def _write_success_reports(
+    rows: list[dict],
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     reports = []
+    warnings = []
     for row in rows:
         if not isinstance(row, dict) or row.get("status") != "success":
             continue
@@ -31,11 +34,15 @@ def _write_success_reports(rows: list[dict]) -> list[dict[str, str]]:
             raise ResultProductError("successful batch row is missing run_dir")
         try:
             reports.append(write_run_report(run_dir))
-        except (OSError, ValueError) as exc:
-            raise ResultProductError(
-                f"cannot render result summary for {run_dir}: {exc}"
-            ) from exc
-    return reports
+        except (OSError, ValueError, ResultProductError) as exc:
+            warnings.append(
+                {
+                    "code": "RESULT_PROJECTION_FAILED",
+                    "run_dir": run_dir,
+                    "message": str(exc) or type(exc).__name__,
+                }
+            )
+    return reports, warnings
 
 
 def _render_completion(payload: dict) -> str:
@@ -58,6 +65,11 @@ def _render_completion(payload: dict) -> str:
     for report in payload["rendered_reports"]:
         lines.append(f"  TXT: {report['text']}")
         lines.append(f"  SVG: {report['svg']}")
+    for warning in payload["projection_warnings"]:
+        lines.append(
+            f"  WARNING [{warning['code']}]: {warning['run_dir']}: "
+            f"{warning['message']}"
+        )
     successful = [
         row.get("run_dir")
         for row in payload["runs"]
@@ -120,7 +132,7 @@ def run_automatic_evaluation(
     )
     batch_dir, summary = executor.execute(plan)
     rows = _load_batch_runs(batch_dir)
-    rendered_reports = _write_success_reports(rows)
+    rendered_reports, projection_warnings = _write_success_reports(rows)
     ok = not summary.get("failed") and not summary.get("not_run")
     payload = {
         "ok": bool(ok),
@@ -130,6 +142,7 @@ def run_automatic_evaluation(
         "summary": summary,
         "runs": rows,
         "rendered_reports": rendered_reports,
+        "projection_warnings": projection_warnings,
     }
     if output_format == "json":
         print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))

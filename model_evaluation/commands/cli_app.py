@@ -59,16 +59,43 @@ def _prompt_value(label: str, default: str | None = None) -> str:
     selected = value or (default or "")
     if not selected:
         raise ConfigError(f"guided init requires a value for {label}")
+    if "REPLACE_WITH" in selected:
+        raise ConfigError(f"guided init does not accept placeholder values for {label}")
     return selected
 
 
-def _guided_init_values(args: argparse.Namespace) -> dict[str, str]:
+def _parse_devices(value: str) -> tuple[int | str, ...]:
+    items = [item.strip() for item in value.split(",")]
+    if not items or any(not item for item in items):
+        raise ConfigError("device IDs must be a non-empty comma-separated list")
+    devices: tuple[int | str, ...] = tuple(
+        int(item) if item.isdecimal() else item for item in items
+    )
+    if len(set(devices)) != len(devices):
+        raise ConfigError("device IDs must be unique")
+    return devices
+
+
+def _guided_init_values(args: argparse.Namespace) -> dict[str, object]:
     choices = ", ".join(sorted(HARDWARE_TEMPLATES))
     hardware = _prompt_value(f"Hardware ({choices})", args.hardware)
     if hardware not in HARDWARE_TEMPLATES:
         raise ConfigError(f"unsupported onboarding hardware template: {hardware}")
+    template = HARDWARE_TEMPLATES[hardware]
+    print(f"Validation status: {template.validation_status}")
+    print(
+        "Template stack: vLLM + lm-evaluation-harness; backend and evaluator "
+        "use the current Controller Python environment. Edit System profiles "
+        "when isolated environments are required."
+    )
+    devices = (
+        ()
+        if hardware == "cpu"
+        else _parse_devices(_prompt_value("Device IDs (comma-separated)", args.devices))
+    )
     return {
         "hardware": hardware,
+        "devices": devices,
         "model_id": _prompt_value("Model ID", args.model_id),
         "models_root": _prompt_value("Models root", args.models_root),
         "model_ref": _prompt_value("Model path relative to models root"),
@@ -89,6 +116,7 @@ def _handle_bootstrap(args: argparse.Namespace) -> bool:
             if args.guided
             else {
                 "hardware": args.hardware,
+                "devices": () if args.hardware == "cpu" else _parse_devices(args.devices),
                 "model_id": args.model_id,
                 "model_ref": args.model_ref,
                 "models_root": args.models_root,

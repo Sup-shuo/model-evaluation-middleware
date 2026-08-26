@@ -147,7 +147,9 @@ python tools/model_convert.py convert \
 
 Remove `--dry-run` only after reviewing the plan. The conversion implementation
 validates structure and tensor equivalence before publishing the new directory
-and refuses to overwrite an existing destination.
+and refuses to overwrite an existing destination. Output and temporary
+directories must be siblings of the source model or live in another independent
+directory; they may not be created inside the source checkpoint.
 
 ## Organize a large catalog
 

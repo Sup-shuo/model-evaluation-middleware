@@ -332,14 +332,18 @@ def print_value(value: Any, output_format: str) -> None:
 def conversion_command(args: argparse.Namespace) -> list[str]:
     route = ROUTES[args.route]
     source = args.source.resolve()
-    output = args.output.absolute()
+    output = args.output.absolute().resolve(strict=False)
     temporary = (
-        args.temporary.absolute()
+        args.temporary.absolute().resolve(strict=False)
         if args.temporary is not None
         else output.with_name(f".{output.name}.converting")
     )
-    if source == output.resolve(strict=False) or source == temporary.resolve(strict=False):
+    if source == output or source == temporary:
         raise ValueError("source, temporary and output directories must be distinct")
+    if source in output.parents or source in temporary.parents:
+        raise ValueError(
+            "derived output and temporary directories must not be nested under source"
+        )
     if temporary.parent != output.parent:
         raise ValueError("temporary and output directories must share a parent")
     if not output.parent.is_dir():

@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "model-evaluation-middleware"
-version = "4.1.0rc1"
+version = "4.1.0rc2"
 description = "Portable glue layer for reproducible model evaluation across hardware and frameworks"
 requires-python = ">=3.10"
-dependencies = ["jsonschema>=4.18", "PyYAML>=6.0"]
+dependencies = ["jsonschema>=4.18,<5", "PyYAML>=6.0"]
 
 [project.scripts]
 eval-manager = "model_evaluation.cli:main"

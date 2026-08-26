@@ -27,26 +27,6 @@ def _extra(params):
         if flag in RESERVED: raise AdapterError('CONFIG_CONFLICT',f'extra_args may not override adapter-owned field {flag}')
     return extra
 
-def _quantization_constraints(capabilities):
-    marker='.vllm.quantization.'
-    constraints={}
-    for key,value in capabilities.items():
-        if not isinstance(key,str) or marker not in key:
-            continue
-        owner,suffix=key.split(marker,1)
-        if not owner.startswith('device.') or not suffix:
-            continue
-        if '.' not in suffix:
-            continue
-        method,field=suffix.rsplit('.',1)
-        if not method or field not in {
-            'supported_group_sizes','reason','recommendation'
-        }:
-            continue
-        constraints.setdefault(method,{})[field]=value
-    return constraints
-
-
 def requirements(i,c):
     dep=i.get('deployment') or {}; model=i.get('model') or {}; mode=(dep.get('management') or {}).get('mode'); params=dep.get('parameters') or {}; req=[]
     if mode=='managed':
@@ -123,9 +103,9 @@ def plan_preflight(i,c):
     env={"set":{"PYTHONHASHSEED":str(params.get('pythonhashseed',1234)),"TOKENIZERS_PARALLELISM":str(params.get('tokenizers_parallelism','false')).lower()}}
     if bool(c.get('offline',False) or i.get('network_policy')=='offline'):
         env['set'].update({"HF_HUB_OFFLINE":"1","HF_DATASETS_OFFLINE":"1","TRANSFORMERS_OFFLINE":"1"})
-    device=(i.get('platform') or {}).get('device') or {}
-    device_capabilities=(device.get('capabilities') or {}).get('values') or {}
-    quantization_constraints=_quantization_constraints(device_capabilities)
+    platform=i.get('platform') or {}
+    device=platform.get('device') or {}
+    runtime=platform.get('runtime') or {}
     payload={
         'model_path':loc,'tokenizer':tokenizer,'architecture':model.get('architecture'),
         'quantization':model.get('quantization'),'trust_remote_code':bool(params.get('trust_remote_code',model.get('trust_remote_code',False))),
@@ -133,10 +113,10 @@ def plan_preflight(i,c):
         'dtype':params.get('dtype','auto'),'gpu_memory_utilization':float(params.get('gpu_memory_utilization',0.8)),
         'max_num_seqs':int(params.get('max_num_seqs',16)),'generation_config':str(params.get('generation_config','vllm')),
         'language_model_only':bool(params.get('language_model_only',False)),
+        'device_vendor':device.get('vendor'),
+        'runtime_family':runtime.get('family'),
+        'runtime_version':runtime.get('version'),
     }
-    if quantization_constraints:
-        payload['device_vendor']=device.get('vendor')
-        payload['quantization_constraints']=quantization_constraints
     stdio={"stdin":{"mode":"null"},"stdout":{"mode":"capture"},"stderr":{"mode":"capture"},"metadata":{}}
     version={"schema_version":"1.0","argv":[str(params.get('executable') or 'vllm'),'--version'],"env_patch":env,"timeout_seconds":timeout,**stdio}
     compatibility={"schema_version":"1.0","argv":["python",str(Path(__file__).with_name('preflight.py').resolve()),'--payload',json.dumps(payload,separators=(',',':'),sort_keys=True)],"env_patch":env,"timeout_seconds":float(params.get('model_probe_timeout_seconds',120.0)),**stdio}

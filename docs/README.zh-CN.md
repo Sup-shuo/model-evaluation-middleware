@@ -89,7 +89,9 @@ eval-manager init my-evaluation --guided
 cd my-evaluation
 ```
 
-按提示填写已经安装好的推理框架、评测框架和本地模型路径，然后执行：
+向导会显示所选硬件模板的验证级别、询问设备 ID，并明确生成的
+vLLM + lm-eval 模板默认共用 Controller 当前 Python 环境。填写已经安装好的
+推理框架、评测框架和本地模型路径后执行：
 
 ```bash
 # 首次连接先做每个任务 1 个样本的 smoke。
@@ -100,8 +102,9 @@ eval-manager evaluate
 ```
 
 `evaluate` 会依次完成配置校验、环境与兼容性检查、计划与资源预览、推理服务启动或连接、
-评测执行、结果保存、所属进程清理，并默认生成 TXT/SVG。预检失败时会指出阻塞层级，
-且不会启动推理服务。
+评测执行、结果保存、所属进程清理，并默认生成 TXT/SVG。正式 Result Product 已成功后，
+若可选 TXT/SVG 投影失败，只会给出警告，不会把评测结果改判为失败。预检失败时会指出
+阻塞层级，且不会启动推理服务。
 
 [安装指南](installation.md)会逐项解释初始化提示和非交互配置方式。熟悉项目后仍可独立使用
 `check`、`plan`、`run`、`run-plan` 和 Matrix 命令。

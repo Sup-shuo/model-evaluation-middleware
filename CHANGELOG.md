@@ -1,6 +1,18 @@
 # Changelog
 
-## Unreleased
+## 4.1.0-rc2
+
+- Moved the MetaX compressed-tensors group-size rule from the Device Adapter to
+  a version-qualified vLLM Backend preflight rule for the recorded
+  C500/MACA/vLLM-MetaX stack. Weight layout parsing now reads only
+  `config_groups.*.weights.group_size`, and declared/configured/resolved
+  quantization methods must agree.
+- Guided init now rejects placeholder answers, asks for device IDs, displays
+  hardware validation level, and explains the generated template's shared
+  Controller environment.
+- Kept formal evaluation success independent from optional TXT/SVG projection
+  failures, tightened manual conversion outputs against nesting under source
+  checkpoints, and bounded `jsonschema` to the supported 4.x line.
 
 - Added a guided beginner path: `init --guided` collects the minimum
   vLLM + lm-eval project values, while `evaluate` runs preflight, managed
@@ -8,8 +20,6 @@
   existing Adapter and Orchestrator contracts.
 - Split CLI argument construction from command dispatch so the beginner
   workflow does not enlarge the central CLI module.
-- Added device-owned vLLM quantization constraints and fail-fast MetaX
-  compressed-tensors group-size checks before service startup.
 - Added explicit manual conversion support for supported mixed-precision Qwen
   compressed-tensors checkpoints; conversion remains outside evaluation runs.
 - Hardened local JSON Schema reference resolution across supported

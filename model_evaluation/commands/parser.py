@@ -80,6 +80,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="交互填写最小 vLLM + lm-eval 配置；不安装环境或下载模型",
     )
+    init_parser.add_argument(
+        "--devices",
+        default="0",
+        help="Comma-separated device IDs; unused by the CPU template",
+    )
     init_parser.add_argument("--model-id", default="example-model")
     init_parser.add_argument(
         "--model-ref",

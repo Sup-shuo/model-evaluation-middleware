@@ -20,11 +20,15 @@ examples, final result publication and owned-process cleanup completed on a real
 machine. It is not a promise that every model supported by the underlying engine
 works.
 
-For MetaX, the validated vLLM-MetaX compressed-tensors kernel supports weight
-group sizes 64 and 128. The backend preflight rejects compressed-tensors models
-with another declared group size before service startup and reports the supported
-sizes plus the manual-conversion recommendation. In particular, a group-size-32
-checkpoint should use a separately materialized BF16 model identity.
+For the validated MetaX stack (C500, MACA Runtime 3.8.0.23, vLLM 0.23.0,
+and the recorded vLLM-MetaX 0.23.0 plugin build), the compressed-tensors weight
+kernel supports group sizes 64 and 128. The vLLM Backend preflight owns this
+version-qualified rule; the Device Adapter reports only device facts. On the
+exact validated stack, another weight group size is rejected before startup
+with the matched versions and capability source. Unknown or upgraded stack
+versions are not rejected by this static rule and remain subject to the native
+vLLM model-config preflight. A group-size-32 checkpoint on the recorded stack
+should use a separately materialized BF16 model identity.
 
 “Real single-device BBH smoke E2E” means the real device/runtime probes, model
 startup, OpenAI-compatible service capability checks, 24 BBH tasks with one

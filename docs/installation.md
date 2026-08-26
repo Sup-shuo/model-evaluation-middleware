@@ -79,9 +79,9 @@ See [Environment isolation](configuration/environments.md) and
 
 ## 5. Create the user configuration
 
-The guided path asks only for hardware, model identity and location, the
-lm-evaluation-harness checkout, cache/results paths, benchmark, and inference
-executable:
+The guided path asks only for hardware and device IDs, model identity and
+location, the lm-evaluation-harness checkout, cache/results paths, benchmark,
+and inference executable:
 
 ```bash
 eval-manager init my-evaluation --guided
@@ -89,16 +89,21 @@ cd my-evaluation
 ```
 
 `--hardware` supports `nvidia`, `mlu`, `metax`, `amd`, `ascend`, and `cpu`.
-The generated common template uses the Controller's current Python environment
-for both Backend and Evaluator. If the real deployment isolates them, edit the
-named environments in System as described in
-[Environment isolation](configuration/environments.md).
+The prompt displays that template's current validation level and asks for
+comma-separated device IDs on accelerator platforms. The generated template is
+explicitly vLLM + lm-evaluation-harness and uses the Controller's current Python
+environment for both Backend and Evaluator. AMD and Ascend templates are marked
+contract-tested rather than real-machine validated. If the real deployment
+isolates environments, edit the named profiles in System as described in
+[Environment isolation](configuration/environments.md). Placeholder values are
+not accepted by the guided path.
 
 For scripts or CI, supply the same values without prompts:
 
 ```bash
 eval-manager init my-evaluation \\
   --hardware mlu \\
+  --devices 0 \\
   --model-id qwen35-08b-base \\
   --models-root /data \\
   --model-ref Qwen/Qwen3.5-0.8B-Base \\
@@ -207,8 +212,11 @@ eval-manager evaluate
 The command stops before inference when preflight fails. When it passes, the
 selected Backend starts or attaches to the inference service, the selected
 Evaluator runs, normalized and native results are saved, owned processes are
-cleaned up, and TXT/SVG summaries are generated. It uses the same Orchestrator
-and Adapter contracts as the lower-level `run` command.
+cleaned up, and TXT/SVG summaries are generated. A projection error is reported
+as a warning after formal success; it does not change `result.json`,
+`metrics.json`, or `terminal.json`, and the command still exits successfully.
+It uses the same Orchestrator and Adapter contracts as the lower-level `run`
+command.
 
 Then validate the final product:
 

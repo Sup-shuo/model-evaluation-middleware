@@ -14,27 +14,38 @@ class HardwareTemplate:
     runtime_family: str
     runtime_root: str | None
     runtime_parameters: tuple[tuple[str, str], ...] = ()
+    validation_status: str = "Adapter contract-tested; real-machine E2E pending"
 
 
 HARDWARE_TEMPLATES = {
-    "nvidia": HardwareTemplate("nvidia", "cuda", "cuda", "/usr/local/cuda"),
-    "mlu": HardwareTemplate("mlu", "neuware", "neuware", "/usr/local/neuware"),
+    "nvidia": HardwareTemplate(
+        "nvidia", "cuda", "cuda", "/usr/local/cuda",
+        validation_status="Real full E2E: NVIDIA A100/CUDA",
+    ),
+    "mlu": HardwareTemplate(
+        "mlu", "neuware", "neuware", "/usr/local/neuware",
+        validation_status="Real full E2E: Cambricon MLU/Neuware",
+    ),
     "metax": HardwareTemplate(
         "metax",
         "maca",
         "maca",
         "/opt/maca",
         (("driver_root", "/opt/mxdriver"), ("driver_tool", "/usr/bin/mx-smi")),
+        validation_status="Real smoke E2E: MetaX C500/MACA",
     ),
     "amd": HardwareTemplate("amd", "rocm", "rocm", "/opt/rocm"),
     "ascend": HardwareTemplate(
         "ascend", "cann", "cann", "/usr/local/Ascend/ascend-toolkit/latest"
     ),
-    "cpu": HardwareTemplate("cpu", "cpu", "cpu", None),
+    "cpu": HardwareTemplate(
+        "cpu", "cpu", "cpu", None,
+        validation_status="Reference Mock E2E; vLLM template is contract-tested",
+    ),
 }
 
 
-def _yaml_scalar(value: str) -> str:
+def _yaml_scalar(value: object) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
@@ -46,6 +57,7 @@ def _system_yaml(
     cache_root: str,
     results_root: str,
     backend_executable: str,
+    devices: tuple[int | str, ...],
 ) -> str:
     selected = HARDWARE_TEMPLATES[hardware]
     runtime_root = f"\n        root: {selected.runtime_root}" if selected.runtime_root else ""
@@ -55,7 +67,9 @@ def _system_yaml(
             f"          {name}: {value}" for name, value in selected.runtime_parameters
         )
         runtime_parameters = f"\n        parameters:\n{values}"
-    devices = "\n      devices: [0]" if hardware != "cpu" else ""
+    devices_yaml = (
+        f"\n      devices: {_yaml_scalar(list(devices))}" if devices else ""
+    )
     return f'''schema_version: "1.3"
 
 system:
@@ -74,7 +88,7 @@ profiles:
 
   hardware:
     local:
-      type: {selected.device}{devices}
+      type: {selected.device}{devices_yaml}
       runtime:
         type: {selected.runtime}{runtime_root}{runtime_parameters}
 
@@ -178,9 +192,19 @@ def initialize_project(
     results_root: str = "results",
     benchmark: str = "bbh",
     backend_executable: str = "vllm",
+    devices: tuple[int | str, ...] | None = None,
 ) -> list[Path]:
     if hardware not in HARDWARE_TEMPLATES:
         raise ConfigError(f"unsupported onboarding hardware template: {hardware}")
+    selected_devices = tuple(
+        devices if devices is not None else (() if hardware == "cpu" else (0,))
+    )
+    if hardware == "cpu" and selected_devices:
+        raise ConfigError("CPU onboarding template does not accept accelerator device IDs")
+    if hardware != "cpu" and not selected_devices:
+        raise ConfigError("accelerator onboarding template requires at least one device ID")
+    if len(set(selected_devices)) != len(selected_devices):
+        raise ConfigError("onboarding device IDs must be unique")
     required = {
         "model_id": model_id,
         "model_ref": model_ref,
@@ -203,6 +227,7 @@ def initialize_project(
             cache_root=cache_root,
             results_root=results_root,
             backend_executable=backend_executable,
+            devices=selected_devices,
         ),
         root / "config" / "evaluation.yaml": _evaluation_yaml(model_id, benchmark),
         root / "config" / "models" / "example.yaml": _model_yaml(model_id, model_ref),

@@ -189,6 +189,7 @@ class PluginAndOnboardingTests(unittest.TestCase):
                 results_root="results",
                 benchmark="bbh",
                 backend_executable="/opt/vllm/bin/vllm",
+                devices=(2, 4),
             )
             system = load_yaml_strict(
                 (root / "config" / "system.yaml").read_text(encoding="utf-8")
@@ -205,6 +206,10 @@ class PluginAndOnboardingTests(unittest.TestCase):
             self.user_schemas.validate("user_model", model)
             self.user_schemas.validate("user_evaluation", evaluation)
             self.assertEqual(system["models"]["root"], "/data")
+            self.assertEqual(
+                system["profiles"]["hardware"]["local"]["devices"],
+                [2, 4],
+            )
             self.assertEqual(
                 system["profiles"]["backend"]["vllm"]["executable"],
                 "/opt/vllm/bin/vllm",

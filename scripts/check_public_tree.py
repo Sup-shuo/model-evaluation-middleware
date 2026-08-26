@@ -40,6 +40,14 @@ PATTERNS = {
 }
 
 
+def allowed_match(label: str, line: str, start: int) -> bool:
+    """Ignore four-part software versions that resemble IPv4 literals."""
+    if label != "non-loopback IPv4":
+        return False
+    prefix = line[max(0, start - 48) : start]
+    return re.search(r"(?:version|runtime)[^0-9\n]{0,24}$", prefix, re.IGNORECASE) is not None
+
+
 def files() -> list[Path]:
     rows = []
     for path in ROOT.rglob("*"):
@@ -67,7 +75,10 @@ def main() -> None:
             continue
         for line_number, line in enumerate(text.splitlines(), 1):
             for label, pattern in PATTERNS.items():
-                if pattern.search(line):
+                if any(
+                    not allowed_match(label, line, match.start())
+                    for match in pattern.finditer(line)
+                ):
                     findings.append(f"{path.relative_to(ROOT)}:{line_number}: {label}")
     if findings:
         raise SystemExit("public-tree privacy check failed:\n" + "\n".join(findings))

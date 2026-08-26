@@ -13,18 +13,6 @@ _DEVICE_LINE = re.compile(
 )
 _MEMORY_TOTAL = re.compile(r"^\s*vis_vram total\s*:\s*(\d+)\s+KB\s*$", re.MULTILINE)
 
-_VLLM_QUANTIZATION_CAPABILITIES = {
-    "device.metax.vllm.quantization.compressed-tensors.supported_group_sizes": [64, 128],
-    "device.metax.vllm.quantization.compressed-tensors.reason": (
-        "the MetaX vLLM compressed-tensors kernel supports weight "
-        "group_size 64 or 128"
-    ),
-    "device.metax.vllm.quantization.compressed-tensors.recommendation": (
-        "use a manually converted BF16 artifact or a compatible quantized checkpoint"
-    ),
-}
-
-
 def _run(argv: list[str], timeout: float) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
@@ -120,7 +108,6 @@ def probe(inputs: dict, context: dict) -> dict:
             "schema_version": "1.0",
             "values": {
                 "device.multi_device": len(selected) > 1,
-                **_VLLM_QUANTIZATION_CAPABILITIES,
             },
         },
     }

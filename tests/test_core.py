@@ -81,7 +81,7 @@ class CoreTests(unittest.TestCase):
             {"env_patch": {"set": {"MACA_VISIBLE_DEVICES": "2"}}},
         )
 
-    def test_metax_device_declares_vllm_quantization_constraints(self):
+    def test_metax_device_reports_only_device_owned_capabilities(self):
         mod=_load_adapter_impl_for_test("device", "metax")
         inventory=[{"id":"0","name":"MetaX MXC500","uuid":"GPU-test-0"}]
         with patch.object(mod,"_listed_devices",return_value=inventory), patch.object(
@@ -89,11 +89,9 @@ class CoreTests(unittest.TestCase):
         ):
             descriptor=mod.probe({"requested_devices":[0]}, {})
         capabilities=descriptor["capabilities"]["values"]
-        self.assertEqual(
-            capabilities[
-                "device.metax.vllm.quantization.compressed-tensors.supported_group_sizes"
-            ],
-            [64,128],
+        self.assertFalse(capabilities["device.multi_device"])
+        self.assertFalse(
+            any(".vllm.quantization." in key for key in capabilities)
         )
 
     def test_maca_runtime_patch_is_explicit_and_machine_owned(self):
@@ -304,13 +302,11 @@ class CoreTests(unittest.TestCase):
                     'model_location':{'local_path':str(model)},
                     'parameters':{'tensor_parallel_size':2,'dependency_probe_timeout_seconds':33,'model_probe_timeout_seconds':77},
                 },
-                'platform':{'device':{
-                    'vendor':'metax',
-                    'capabilities':{'values':{
-                        'device.metax.vllm.quantization.compressed-tensors.supported_group_sizes':[64,128],
-                        'device.metax.vllm.quantization.compressed-tensors.reason':'test constraint',
-                    }},
-                }},'endpoint':{'host':'127.0.0.1','port':8091},
+                'platform':{
+                    'device':{'vendor':'metax'},
+                    'runtime':{'family':'maca','version':'3.8.0.23'},
+                },
+                'endpoint':{'host':'127.0.0.1','port':8091},
                 'log_path':str(Path(td)/'backend.log'),'network_policy':'offline',
             }
             out=vllm_impl.plan_preflight(inp,{'offline':True})
@@ -327,43 +323,78 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(payload['max_model_len'],8192)
             self.assertEqual(payload['tensor_parallel_size'],2)
             self.assertEqual(payload['device_vendor'],'metax')
-            self.assertEqual(
-                payload['quantization_constraints']['compressed-tensors'][
-                    'supported_group_sizes'
-                ],
-                [64,128],
-            )
+            self.assertEqual(payload['runtime_family'],'maca')
+            self.assertEqual(payload['runtime_version'],'3.8.0.23')
+            self.assertNotIn('quantization_constraints',payload)
 
-    def test_vllm_preflight_rejects_device_unsupported_quantization_group_size(self):
+    def test_vllm_preflight_applies_only_validated_stack_weight_constraints(self):
         from model_evaluation.adapters.backend.vllm import preflight
         with tempfile.TemporaryDirectory() as td:
             model=Path(td)/'model'; model.mkdir()
             (model/'config.json').write_text(json.dumps({
                 'quantization_config':{
                     'quant_method':'compressed-tensors',
+                    'group_size':8,
                     'config_groups':{'group_0':{
-                        'weights':{'num_bits':4,'group_size':32}
+                        'weights':{'num_bits':4,'group_size':32},
+                        'input_activations':{'num_bits':8,'group_size':16},
+                        'output_activations':{'num_bits':8,'group_size':4},
                     }},
                 },
             }),encoding='utf-8')
             payload={
                 'device_vendor':'metax',
-                'quantization_constraints':{
-                    'compressed-tensors':{
-                        'supported_group_sizes':[64,128],
-                        'reason':'MetaX test constraint',
-                        'recommendation':'use BF16',
-                    },
-                },
+                'runtime_family':'maca',
+                'runtime_version':'3.8.0.23',
+            }
+            packages={
+                'vllm':'0.23.0',
+                'vllm-metax':'0.23.0+ge3d464.d20260730.maca3.8.0.103.torch2.10.0',
             }
             method,sizes,path=preflight._local_quantization_metadata(str(model))
             self.assertEqual((method,sizes),('compressed-tensors',[32]))
+            rule=preflight._validated_quantization_rule(payload,packages,method)
+            self.assertIsNotNone(rule)
+            self.assertEqual(
+                rule['capability_source'],
+                'backend.vllm.preflight.validated-stack',
+            )
             with self.assertRaises(preflight.PreflightFailure) as caught:
-                preflight._enforce_quantization_constraints(
-                    payload,quantization=method,group_sizes=sizes,config_path=path
+                preflight._enforce_quantization_rule(
+                    rule,quantization=method,group_sizes=sizes,config_path=path
                 )
             self.assertEqual(caught.exception.code,'MODEL_QUANTIZATION_INCOMPATIBLE')
             self.assertEqual(caught.exception.details['supported_group_sizes'],[64,128])
+            unknown=dict(packages)
+            unknown['vllm-metax']='0.24.0'
+            self.assertIsNone(
+                preflight._validated_quantization_rule(payload,unknown,method)
+            )
+
+    def test_vllm_preflight_rejects_quantization_method_mismatch(self):
+        from model_evaluation.adapters.backend.vllm import preflight
+        config_path=Path('/models/example/config.json')
+        with self.assertRaises(preflight.PreflightFailure) as catalog_mismatch:
+            preflight._validate_quantization_methods(
+                declared='awq',
+                configured='compressed_tensors',
+                config_path=config_path,
+            )
+        self.assertEqual(
+            catalog_mismatch.exception.code,
+            'MODEL_METADATA_INCONSISTENT',
+        )
+        with self.assertRaises(preflight.PreflightFailure) as engine_mismatch:
+            preflight._validate_quantization_methods(
+                declared='compressed-tensors',
+                configured='compressed_tensors',
+                resolved='awq',
+                config_path=config_path,
+            )
+        self.assertEqual(
+            engine_mismatch.exception.details['resolved_quantization'],
+            'awq',
+        )
 
     def test_vllm_language_model_only_is_adapter_owned_and_reaches_preflight(self):
         from model_evaluation.adapters.backend.vllm import impl as vllm_impl

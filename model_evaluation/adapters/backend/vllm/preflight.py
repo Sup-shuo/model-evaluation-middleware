@@ -33,26 +33,63 @@ def _normalized_quantization(value: object) -> str:
     return str(value or "").strip().lower().replace("_", "-")
 
 
-def _group_sizes(value: object) -> list[int]:
+_UNRESOLVED = object()
+
+_METAX_COMPRESSED_TENSORS_RULE = {
+    "device_vendor": "metax",
+    "runtime_family": "maca",
+    "runtime_version": "3.8.0.23",
+    "backend_version": "0.23.0",
+    "plugin_distribution": "vllm-metax",
+    "plugin_version": (
+        "0.23.0+ge3d464.d20260730.maca3.8.0.103.torch2.10.0"
+    ),
+    "quantization": "compressed-tensors",
+    "supported_group_sizes": [64, 128],
+    "capability_source": "backend.vllm.preflight.validated-stack",
+    "reason": (
+        "the validated MetaX/MACA/vLLM-MetaX compressed-tensors weight kernel "
+        "supports group_size 64 or 128"
+    ),
+    "recommendation": (
+        "use a manually converted BF16 artifact or a compatible quantized checkpoint"
+    ),
+}
+
+
+def _distribution_versions() -> dict[str, str]:
+    versions: dict[str, str] = {}
+    for distribution in ("vllm", "vllm-metax", "torch", "transformers"):
+        try:
+            versions[distribution] = importlib.metadata.version(distribution)
+        except importlib.metadata.PackageNotFoundError:
+            continue
+    return versions
+
+
+def _weight_group_sizes(value: object) -> list[int]:
+    if not isinstance(value, dict):
+        return []
+    config_groups = value.get("config_groups")
+    if not isinstance(config_groups, dict):
+        return []
+
     found: set[int] = set()
-
-    def visit(node: object) -> None:
-        if isinstance(node, dict):
-            for key, item in node.items():
-                if key == "group_size" and isinstance(item, (int, str)):
-                    try:
-                        size = int(item)
-                    except ValueError:
-                        continue
-                    if size > 0:
-                        found.add(size)
-                else:
-                    visit(item)
-        elif isinstance(node, list):
-            for item in node:
-                visit(item)
-
-    visit(value)
+    for group in config_groups.values():
+        if not isinstance(group, dict):
+            continue
+        weights = group.get("weights")
+        if not isinstance(weights, dict):
+            continue
+        group_size = weights.get("group_size")
+        if not isinstance(group_size, (int, str)):
+            continue
+        try:
+            size = int(group_size)
+        except ValueError:
+            continue
+        if size > 0:
+            found.add(size)
     return sorted(found)
 
 
@@ -72,29 +109,105 @@ def _local_quantization_metadata(
     method = _normalized_quantization(
         quantization.get("quant_method") or quantization.get("format")
     )
-    return method or None, _group_sizes(quantization), config_path
+    return method or None, _weight_group_sizes(quantization), config_path
 
 
-def _enforce_quantization_constraints(
+def _catalog_quantization(value: object) -> str | None:
+    method = _normalized_quantization(value)
+    if not method or method in _DTYPES or method in {"auto", "none", "unquantized"}:
+        return None
+    return method
+
+
+def _validate_quantization_methods(
+    *,
+    declared: object,
+    configured: object,
+    resolved: object = _UNRESOLVED,
+    config_path: Path,
+) -> str | None:
+    declared_method = _catalog_quantization(declared)
+    configured_method = _catalog_quantization(configured)
+    if (
+        declared_method
+        and configured_method
+        and declared_method != configured_method
+    ):
+        raise PreflightFailure(
+            "MODEL_METADATA_INCONSISTENT",
+            (
+                f"model catalog declares quantization={declared_method!r}, but "
+                f"config.json declares {configured_method!r}"
+            ),
+            details={
+                "declared_quantization": declared_method,
+                "configured_quantization": configured_method,
+                "resolved_quantization": None,
+                "model_config": str(config_path),
+            },
+        )
+
+    expected = configured_method or declared_method
+    if resolved is _UNRESOLVED:
+        return expected
+
+    resolved_method = _catalog_quantization(resolved)
+    if expected and resolved_method != expected:
+        rendered = resolved_method or "unquantized"
+        raise PreflightFailure(
+            "MODEL_METADATA_INCONSISTENT",
+            (
+                f"model metadata declares quantization={expected!r}, but vLLM "
+                f"resolved {rendered!r}"
+            ),
+            details={
+                "declared_quantization": declared_method,
+                "configured_quantization": configured_method,
+                "resolved_quantization": resolved_method,
+                "model_config": str(config_path),
+            },
+        )
+    return expected or resolved_method
+
+
+def _validated_quantization_rule(
     payload: dict,
+    packages: dict[str, str],
+    quantization: object,
+) -> dict | None:
+    rule = _METAX_COMPRESSED_TENSORS_RULE
+    if _normalized_quantization(quantization) != rule["quantization"]:
+        return None
+    actual = {
+        "device_vendor": _normalized_quantization(payload.get("device_vendor")),
+        "runtime_family": _normalized_quantization(payload.get("runtime_family")),
+        "runtime_version": str(payload.get("runtime_version") or ""),
+        "backend_version": packages.get("vllm", ""),
+        "plugin_version": packages.get(rule["plugin_distribution"], ""),
+    }
+    expected = {
+        "device_vendor": rule["device_vendor"],
+        "runtime_family": rule["runtime_family"],
+        "runtime_version": rule["runtime_version"],
+        "backend_version": rule["backend_version"],
+        "plugin_version": rule["plugin_version"],
+    }
+    if actual != expected:
+        return None
+    return dict(rule)
+
+
+def _enforce_quantization_rule(
+    rule: dict | None,
     *,
     quantization: object,
     group_sizes: list[int],
     config_path: Path,
 ) -> None:
-    constraints = payload.get("quantization_constraints")
-    if not isinstance(constraints, dict):
+    if not rule:
         return
     method = _normalized_quantization(quantization)
-    rule = next(
-        (
-            value
-            for key, value in constraints.items()
-            if _normalized_quantization(key) == method and isinstance(value, dict)
-        ),
-        None,
-    )
-    if not rule:
+    if method != _normalized_quantization(rule.get("quantization")):
         return
     supported = sorted(
         {
@@ -107,13 +220,9 @@ def _enforce_quantization_constraints(
     if not supported or not unsupported:
         return
 
-    reason = str(
-        rule.get("reason")
-        or "the selected device/backend combination does not support this quantization layout"
-    )
     recommendation = str(rule.get("recommendation") or "").strip()
     message = (
-        f"{reason}; model declares group_size={unsupported}, "
+        f"{rule['reason']}; model declares weight group_size={unsupported}, "
         f"supported_group_sizes={supported}"
     )
     if recommendation:
@@ -122,9 +231,14 @@ def _enforce_quantization_constraints(
         "MODEL_QUANTIZATION_INCOMPATIBLE",
         message,
         details={
-            "device_vendor": payload.get("device_vendor"),
+            "device_vendor": rule["device_vendor"],
+            "runtime_family": rule["runtime_family"],
+            "validated_runtime_version": rule["runtime_version"],
+            "validated_backend_version": rule["backend_version"],
+            "validated_plugin_version": rule["plugin_version"],
+            "capability_source": rule["capability_source"],
             "quantization": method,
-            "model_group_sizes": group_sizes,
+            "model_weight_group_sizes": group_sizes,
             "supported_group_sizes": supported,
             "model_config": str(config_path),
             "recommendation": recommendation or None,
@@ -138,9 +252,20 @@ def _engine_config(payload: dict):
     config_quantization, config_group_sizes, config_path = (
         _local_quantization_metadata(model_path)
     )
-    _enforce_quantization_constraints(
+    expected_quantization = _validate_quantization_methods(
+        declared=declared_quantization,
+        configured=config_quantization,
+        config_path=config_path,
+    )
+    versions = _distribution_versions()
+    quantization_rule = _validated_quantization_rule(
         payload,
-        quantization=config_quantization or declared_quantization,
+        versions,
+        expected_quantization,
+    )
+    _enforce_quantization_rule(
+        quantization_rule,
+        quantization=expected_quantization,
         group_sizes=config_group_sizes,
         config_path=config_path,
     )
@@ -184,34 +309,24 @@ def _engine_config(payload: dict):
     config = EngineArgs(**kwargs).create_engine_config()
     model = config.model_config
     resolved_quantization = getattr(model, "quantization", None)
-    if declared_quantization and declared_quantization not in _DTYPES and declared_quantization not in {
-        "auto", "none", "unquantized"
-    } and not resolved_quantization:
-        raise PreflightFailure(
-            "MODEL_METADATA_INCONSISTENT",
-            f"model catalog declares quantization={declared_quantization!r}, but vLLM resolved an unquantized model; "
-            "check the active model config.json and quantization metadata",
-            details={
-                "declared_quantization": declared_quantization,
-                "resolved_quantization": resolved_quantization,
-                "model_config": str(Path(model_path).resolve() / "config.json"),
-            },
-        )
+    effective_quantization = _validate_quantization_methods(
+        declared=declared_quantization,
+        configured=config_quantization,
+        resolved=resolved_quantization,
+        config_path=config_path,
+    )
     hf_config = getattr(model, "hf_config", None)
-    _enforce_quantization_constraints(
+    quantization_rule = _validated_quantization_rule(
         payload,
-        quantization=(
-            resolved_quantization or config_quantization or declared_quantization
-        ),
+        versions,
+        effective_quantization,
+    )
+    _enforce_quantization_rule(
+        quantization_rule,
+        quantization=effective_quantization,
         group_sizes=config_group_sizes,
         config_path=config_path,
     )
-    versions: dict[str, str] = {}
-    for distribution in ("vllm", "torch", "transformers"):
-        try:
-            versions[distribution] = importlib.metadata.version(distribution)
-        except importlib.metadata.PackageNotFoundError:
-            continue
     return {
         "backend": "vllm",
         "python_executable": sys.executable,

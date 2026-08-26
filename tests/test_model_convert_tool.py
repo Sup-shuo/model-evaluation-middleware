@@ -268,6 +268,28 @@ class ModelConvertToolTests(unittest.TestCase):
             payload = json.loads(completed.stdout)
             self.assertIn("unsafe", payload["checkpoint"]["issues"][0])
 
+    def test_convert_rejects_derived_directories_nested_under_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source = self.checkpoint(
+                Path(temporary),
+                architecture="Qwen3_5ForConditionalGeneration",
+                quantization={"quant_method": "awq"},
+            )
+            completed = run_tool(
+                "convert",
+                "--route",
+                "awq-to-bf16",
+                "--source",
+                str(source),
+                "--output",
+                str(source / "derived"),
+                "--source-ref",
+                "owner/model",
+                "--dry-run",
+            )
+            self.assertEqual(completed.returncode, 2)
+            self.assertIn("must not be nested under source", completed.stderr)
+
     def test_route_mismatch_and_existing_output_fail_before_conversion(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

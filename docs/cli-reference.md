@@ -9,7 +9,7 @@ omitted.
 
 | Command | Purpose |
 |---|---|
-| `eval-manager init [path] --guided` | Prompt for the minimum vLLM + lm-eval project values; never installs or downloads |
+| `eval-manager init [path] --guided` | Prompt for the minimum vLLM + lm-eval values, device IDs, validation level, and shared-environment notice; never installs or downloads |
 | `eval-manager init [path] --hardware <type> ...` | Create the same project non-interactively without overwriting existing files |
 | `eval-manager config list [--kind ...]` | List System, Model, and Evaluation catalog entries |
 | `eval-manager config show <kind> <reference>` | Display one stored configuration document |
@@ -42,8 +42,10 @@ automation.
 
 `evaluate` uses `config/system.yaml` and `config/evaluation.yaml` by default,
 accepts `--system-config`, `--evaluation-config`, `--results-root`, and
-`--cache-root`, and always renders TXT/SVG for successful runs. It exits before
-service startup if the combined preflight fails.
+`--cache-root`, and attempts TXT/SVG rendering for successful runs. Projection
+failure is emitted as `RESULT_PROJECTION_FAILED` without changing a formally
+successful evaluation exit status. It exits before service startup if the
+combined preflight fails.
 
 `run` and `run-plan` accept `--results-root` and `--cache-root` overrides.
 `run-plan` also supports `--resume-dir` and `--continue-on-error` when its input
