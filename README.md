@@ -205,6 +205,7 @@ Successful runs use the following default name:
 results/<run-id>/
 ├── result.json
 ├── metrics.json
+├── performance.json          # Evaluator time and exact token usage when available
 ├── terminal.json
 ├── raw/
 ├── samples/
@@ -215,7 +216,11 @@ results/<run-id>/
 ```
 
 Failed runs add `failure.json`. Each public JSON document has an independent
-Schema and is checked together with cross-file consistency rules. A complete
+Schema and is checked together with cross-file consistency rules.
+`performance.json` measures only the Evaluator subprocess. Its
+`tokens_per_second` is total endpoint-reported tokens divided by that duration,
+not raw model decode speed; unavailable exact token counters remain `null`.
+A complete
 synthetic example is available under
 [`examples/result_example/`](examples/result_example/), while the image below
 is a sanitized real MLU full-BBH result.
@@ -231,6 +236,7 @@ run = load_run("results/<run-id>")
 summary = run.metrics.summary()
 tasks = run.metrics.tasks()
 runtime = run.runtime()
+performance = run.performance()
 artifacts = run.artifacts()
 ```
 

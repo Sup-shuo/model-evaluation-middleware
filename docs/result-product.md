@@ -7,6 +7,7 @@ defines the following formal documents:
 |---|---|---|
 | `result.json` | Run identity, normalized summary metrics and artifact references | Required on success |
 | `metrics.json` | Summary, group and task metrics | Required with `result.json` |
+| `performance.json` | Evaluator-process duration and exact endpoint token usage when available | Optional on success; emitted by current Core |
 | `terminal.json` | Final outcome, local timestamps and cleanup status | Always required |
 | `failure.json` | Failure stage, primary error, log excerpts and cleanup result | Required on failure |
 | `config/run_config.json` | Effective run selection, resolved Specs and Adapter identities | Always required after initialization |
@@ -14,7 +15,8 @@ defines the following formal documents:
 
 Their schemas are distributed with the Python package as
 `model_evaluation/schemas/`, including dedicated schemas for the result,
-metrics, terminal, failure, run configuration, and runtime-version products.
+metrics, performance, terminal, failure, run configuration, and runtime-version
+products.
 Result Product Schema `1.0` is frozen for the 4.1 release line: incompatible
 changes require a new schema version. `terminal.json` is written last and is the public completion
 marker; a directory without it is not a completed result product.
@@ -38,6 +40,16 @@ verify cryptographic provenance and does not turn a result into tamper-proof
 evidence. The product records what was run and preserves the framework output;
 trust and governance remain outside this glue layer.
 
+`performance.json` uses the fixed `evaluator_process` measurement scope. The
+duration starts immediately before the Evaluator process and ends when that
+process exits, excluding model-service startup, normalization, cleanup, and
+TXT/SVG rendering. The lm-eval Adapter sums exact `usage` counters returned by
+every successful OpenAI-compatible completion response. If any response lacks
+complete counters, prompt, completion, total, and throughput values are
+`null`; periodic Backend log rates are never used to infer totals.
+`tokens_per_second` is `total_tokens / evaluation_duration_seconds`, so it is
+an end-to-end evaluator rate rather than a pure model decode benchmark.
+
 Python consumers can use the same validation boundary without parsing CLI
 output:
 
@@ -49,6 +61,7 @@ run.metrics.summary()
 run.metrics.groups()
 run.metrics.tasks()
 run.runtime()
+run.performance()
 run.artifacts()
 ```
 

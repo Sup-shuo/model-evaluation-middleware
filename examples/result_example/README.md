@@ -16,5 +16,7 @@ From the repository root:
 ```
 
 The committed TXT and SVG files are sanitized presentation projections. The
-three top-level result JSON documents and the two records under `config/` remain
-the stable machine-readable protocol.
+JSON documents present here and the two records under `config/` conform to the
+stable machine-readable protocol. Optional `performance.json` is intentionally
+omitted in this synthetic example to demonstrate that consumers must support
+its documented optionality.

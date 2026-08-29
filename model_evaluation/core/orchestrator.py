@@ -5,27 +5,16 @@ import time
 from pathlib import Path
 
 from model_evaluation.core.files import atomic_json
-from model_evaluation.core.compatibility import (
-    device_runtime_compatibility,
-    evaluate,
-    facts_from_device,
-    facts_from_runtime,
-    facts_from_environment,
-    merge_fact_sets,
-)
 from model_evaluation.core.config.platform import adapter_parameters
 from model_evaluation.core.errors import (
     AdapterExecutionError,
     CompatibilityError,
-    ModelEvalError,
     ProcessError,
-    StaleProcessError,
 )
 from model_evaluation.core.process.env import prepare_process_for_environment
 from model_evaluation.core.process.manager import ProcessManager
-from model_evaluation.core.process.signals import orchestration_signal_guard
 from model_evaluation.core.resources import ResourceManager
-from model_evaluation.core.results import allocate_run_dir, build_run_config, iso_now
+from model_evaluation.core.results import build_run_config, iso_now
 from model_evaluation.core.runtime_record import (
     refresh_environment_versions,
     runtime_versions_base,
@@ -43,19 +32,12 @@ from model_evaluation.core.backend_preflight import (
     preflight_error,
     run_backend_preflight as execute_backend_preflight,
 )
-from model_evaluation.core.run_finalization import finalize_run
 from model_evaluation.core.serialization import json_loads_strict
 from model_evaluation.core.schema.validator import SchemaStore
 from model_evaluation.core.security import redact_diagnostic
-from model_evaluation.core.execution_plan import validate_execution_plan
-from model_evaluation.core.run_lifecycle import RunContext, validate_state_transition
-from model_evaluation.core.orchestration_pipeline import (
-    evaluate_and_publish,
-    prepare_dataset_and_task,
-    prepare_platform,
-    preflight_evaluator,
-    start_service,
-)
+from model_evaluation.core.run_lifecycle import validate_state_transition
+from model_evaluation.core.execution_revalidation import revalidate_platform
+from model_evaluation.core.orchestrator_execution import execute_plan
 
 class Orchestrator:
     def __init__(
@@ -394,87 +376,8 @@ class Orchestrator:
         if declared_revision is not None and artifact.get('revision') != declared_revision:
             raise CompatibilityError(f'dataset artifact revision disagrees with BenchmarkSpec: expected {declared_revision!r}, got {artifact.get("revision")!r}')
 
-    @staticmethod
-    def _verify_environment_identity(label: str, current: dict, expected: dict) -> None:
-        for key in ('provider','identity','python','executable_root'):
-            expected_value=expected.get(key)
-            if expected_value is not None and current.get(key) != expected_value:
-                raise CompatibilityError(f'{label} {key} changed after planning: expected {expected_value!r}, got {current.get(key)!r}')
-
     def _revalidate_platform(self, plan: dict, run_dir: Path) -> dict:
-        """Re-probe the execution platform and re-evaluate all pre-service requirements.
-
-        Identity checks protect the frozen plan, while requirement re-evaluation
-        catches capability drift that does not necessarily change identity/version.
-        The returned descriptors are the fresh execution-time descriptors and are
-        used for process wrapping instead of stale planning snapshots.
-        """
-        specs = plan['resolved']['specs']
-        deployment = specs['deployment']
-        platform = specs['platform']
-        expected = plan['resolved']['platform']
-        eval_client=self.registry.get('environment',platform['evaluation_environment']['provider'])
-        current_eval=self._invoke(eval_client,'resolve',{'profile':platform['evaluation_environment']['profile'],'parameters':adapter_parameters(platform,'evaluation_environment')},context={'timeout_seconds':3,'execution_revalidation':True},timeout=4)
-        self._verify_environment_identity('evaluation environment',current_eval,expected['evaluation_environment'])
-
-        fresh=copy.deepcopy(expected)
-        fresh['evaluation_environment']=current_eval
-        facts=merge_fact_sets(facts_from_environment(current_eval,'evaluation_environment'))
-        reports: dict[str,dict] = {}
-
-        if deployment['management']['mode'] == 'managed':
-            dev_client=self.registry.get('device',platform['device']['adapter'])
-            device_params = adapter_parameters(platform, 'device')
-            runtime_params = adapter_parameters(platform, 'runtime')
-            current=self._invoke(dev_client,'probe',{'requested_devices':platform['device'].get('devices',[]),'parameters':device_params},context={'timeout_seconds':3,'execution_revalidation':True},timeout=4)
-            wanted = {device['id'] for device in expected['device']['devices']}
-            got = {device['id'] for device in current['devices']}
-            if current['vendor'] != expected['device']['vendor'] or got != wanted:
-                raise CompatibilityError(f'device facts changed after planning: expected vendor/devices={expected["device"]["vendor"]}/{sorted(wanted)}, got={current["vendor"]}/{sorted(got)}')
-            current_visibility=self._invoke(dev_client,'visibility',{'devices':[d['id'] for d in current['devices']],'descriptor':current,'parameters':device_params},context={'timeout_seconds':3,'execution_revalidation':True},timeout=4)['env_patch']
-            if current_visibility != expected.get('device_env_patch',{}):
-                raise CompatibilityError('device visibility EnvPatch changed after planning')
-
-            rt_client=self.registry.get('runtime',platform['runtime']['adapter'])
-            runtime=self._invoke(rt_client,'probe',{'profile':platform['runtime'].get('profile'),'parameters':runtime_params},context={'timeout_seconds':3,'execution_revalidation':True},timeout=4)
-            if runtime['family'] != expected['runtime']['family'] or not runtime['available']:
-                raise CompatibilityError(f'runtime facts changed after planning: expected {expected["runtime"]["family"]}, got {runtime.get("family")} available={runtime.get("available")}')
-            if expected['runtime'].get('version') not in (None,'unknown') and runtime.get('version') != expected['runtime'].get('version'):
-                raise CompatibilityError(f'runtime version changed after planning: expected {expected["runtime"].get("version")}, got {runtime.get("version")}')
-            pair=device_runtime_compatibility(current,runtime)
-            reports['device_runtime_pair']={'compatible':pair.compatible,'reasons':pair.reasons,'optional_misses':pair.optional_misses,'diagnostics':pair.diagnostics}
-            if not pair.compatible:
-                raise CompatibilityError('; '.join(pair.reasons), details={'diagnostics': pair.diagnostics})
-            current_runtime_patch=self._invoke(rt_client,'resolve_environment',{'descriptor':runtime,'profile':platform['runtime'].get('profile'),'parameters':runtime_params},context={'timeout_seconds':3,'execution_revalidation':True},timeout=4)['env_patch']
-            if current_runtime_patch != expected.get('runtime_env_patch',{}):
-                raise CompatibilityError('runtime EnvPatch changed after planning')
-
-            be_client=self.registry.get('environment',platform['backend_environment']['provider'])
-            current_be=self._invoke(be_client,'resolve',{'profile':platform['backend_environment']['profile'],'parameters':adapter_parameters(platform,'backend_environment')},context={'timeout_seconds':3,'execution_revalidation':True},timeout=4)
-            self._verify_environment_identity('backend environment',current_be,expected['backend_environment'])
-
-            fresh.update({'device':current,'runtime':runtime,'backend_environment':current_be,'device_env_patch':current_visibility,'runtime_env_patch':current_runtime_patch})
-            facts=merge_fact_sets(facts,facts_from_device(current),facts_from_runtime(runtime),facts_from_environment(current_be,'backend_environment'))
-
-        for name,key in (
-            ('deployment_compatibility','deployment_compatibility_requirements'),
-            ('backend','backend_requirements'),
-            ('binding','binding_requirements'),
-        ):
-            req=plan['resolved'].get(key)
-            if not req:
-                continue
-            report=evaluate(req,facts)
-            reports[name]={'compatible':report.compatible,'reasons':report.reasons,'optional_misses':report.optional_misses,'diagnostics':report.diagnostics}
-            if not report.compatible:
-                atomic_json(run_dir/'.run'/'diagnostics'/'execution_preflight_compatibility.json',{'compatible':False,'reports':reports})
-                raise CompatibilityError(
-                    f'{name} requirements changed after planning: ' + '; '.join(report.reasons),
-                    details={'diagnostics': report.diagnostics},
-                )
-
-        atomic_json(run_dir/'.run'/'diagnostics'/'execution_preflight_compatibility.json',{'compatible':True,'reports':reports})
-        return fresh
+        return revalidate_platform(self, plan, run_dir)
 
     def _redact_diagnostic(self, value):
         return redact_diagnostic(value, self.pm.secrets.redaction_values())
@@ -519,67 +422,4 @@ class Orchestrator:
         )
 
     def execute(self, plan: dict) -> Path:
-        validate_execution_plan(plan,self.schemas)
-        if plan['compatibility']['status']=='incompatible':
-            raise CompatibilityError(
-                '; '.join(plan['compatibility'].get('reasons') or ['plan is incompatible']),
-                details={'diagnostics': plan['compatibility'].get('diagnostics') or []},
-            )
-        non_global_claims=[c for c in plan['resources'] if c['kind']!='run_lock']
-        with orchestration_signal_guard(), self.resources.run_lock():
-            self._active_plan=plan
-            stale=self.pm.recover_stale_managed()
-            unresolved=[x for x in stale if x.get('status') in {'identity_mismatch','cleanup_failed','invalid','orphaned_group_ambiguous'}]
-            if unresolved:
-                raise StaleProcessError(f"unresolved stale managed-process ownership records: {unresolved}")
-            with self.resources.acquire(non_global_claims):
-                started_at=iso_now(plan)
-                run_dir = allocate_run_dir(self.results_root, plan)
-                context = RunContext(
-                    plan=plan,
-                    run_dir=run_dir,
-                    started_at=started_at,
-                    stale_recovery=copy.deepcopy(stale),
-                )
-                failure: BaseException | None = None
-                failure_stage: str | None = None
-                self._warning_events=[copy.deepcopy(x) for x in (plan.get('warnings') or [])]
-                try:
-                    self._persist_initial(run_dir,plan,started_at=started_at)
-                    if stale:
-                        atomic_json(
-                            run_dir / '.run' / 'diagnostics' / 'stale_process_recovery.json',
-                            stale,
-                        )
-                    self._status(run_dir, 'CREATED')
-                    self._status(run_dir, 'PLANNED')
-                    prepare_platform(self, context)
-                    prepare_dataset_and_task(self, context)
-                    preflight_evaluator(self, context)
-                    start_service(self, context)
-                    evaluate_and_publish(self, context)
-                except BaseException as exc:
-                    failure=exc
-                    failure_stage=self._current_state(run_dir) or 'INITIALIZING'
-                    self._append_core_error(run_dir,failure_stage,exc)
-                    try: self._status(run_dir,'FAILED',error=self._error_record(exc),failure_stage=failure_stage)
-                    except Exception: pass
-                finally:
-                    failure, failure_stage = finalize_run(
-                        self,
-                        run_dir=run_dir,
-                        run_id=context.run_id,
-                        plan=plan,
-                        mode=context.mode,
-                        started_at=started_at,
-                        failure=failure,
-                        failure_stage=failure_stage,
-                        backend_handle=context.backend_handle,
-                        backend_shutdown=context.backend_shutdown,
-                        evaluator_returncode=context.evaluator_returncode,
-                    )
-                if failure is not None:
-                    if isinstance(failure, ModelEvalError):
-                        failure.details.setdefault('run_dir',str(run_dir))
-                    raise failure
-        return run_dir
+        return execute_plan(self, plan)

@@ -46,6 +46,18 @@ def render_inspection(report: dict) -> str:
         f"Tasks: {report.get('tasks', 0)}",
         f"Effective samples: {report.get('effective_samples') if report.get('effective_samples') is not None else '-'}",
     ]
+    performance = report.get("performance") or {}
+    if performance:
+        usage = performance.get("token_usage") or {}
+        lines.extend(
+            [
+                f"Evaluation seconds: {performance.get('evaluation_duration_seconds')}",
+                f"Prompt tokens: {usage.get('prompt_tokens')}",
+                f"Completion tokens: {usage.get('completion_tokens')}",
+                f"Total tokens: {usage.get('total_tokens')}",
+                f"Total token/s: {performance.get('tokens_per_second')}",
+            ]
+        )
     summary = report.get("summary") or {}
     if summary:
         lines.append("Metrics:")

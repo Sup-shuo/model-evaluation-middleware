@@ -139,6 +139,7 @@ def publish_result(
     raw_root: str | Path,
     result: dict,
     *,
+    performance: dict | None = None,
     schemas=None,
 ) -> dict:
     """Publish framework output as a compact, user-facing experiment result.
@@ -196,6 +197,10 @@ def publish_result(
     if schemas is not None:
         schemas.validate("result", published)
         schemas.validate("metrics", metrics)
+        if performance is not None:
+            schemas.validate("performance", performance)
+    if performance is not None:
+        atomic_json(root / "performance.json", performance)
     atomic_json(root / "metrics.json", metrics)
     atomic_json(root / "result.json", published)
     return published

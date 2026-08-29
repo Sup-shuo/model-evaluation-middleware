@@ -1,5 +1,21 @@
 # Changelog
 
+## 4.1.0-rc3
+
+- Added an optional `performance.json` Result Product with Evaluator-process
+  duration, conservative exact token counters, end-to-end total-token rate,
+  Schema and cross-file checks, SDK access, and TXT/SVG/inspect projections.
+  The lm-eval transport proxy records OpenAI response usage without changing
+  evaluation requests or outcomes.
+- Split configuration compilation, Matrix execution, orchestration execution,
+  evaluation publication, CLI execution, and process shutdown into focused
+  modules while preserving the existing public entry points.
+- Kept incomplete endpoint token counters explicitly unavailable instead of
+  inferring them from logs, and hardened concurrent usage persistence and
+  delegated process-group shutdown handling.
+- Improved standalone Qwen conversion compatibility across Transformers and
+  compressed-tensors versions and verified tied embedding material explicitly.
+
 ## 4.1.0-rc2
 
 - Moved the MetaX compressed-tensors group-size rule from the Device Adapter to

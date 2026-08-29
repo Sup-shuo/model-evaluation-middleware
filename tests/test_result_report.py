@@ -46,6 +46,16 @@ class ResultReportTests(unittest.TestCase):
                 "started_at": "2026-08-13T12:00:00+08:00",
                 "finished_at": "2026-08-13T12:30:00+08:00",
             },
+            "performance.json": {
+                "evaluation_duration_seconds": 120.0,
+                "token_usage": {
+                    "source": "openai_response_usage",
+                    "prompt_tokens": 1000,
+                    "completion_tokens": 200,
+                    "total_tokens": 1200,
+                },
+                "tokens_per_second": 10.0,
+            },
         }
         for filename, value in values.items():
             (run / filename).write_text(json.dumps(value), encoding="utf-8")
@@ -100,6 +110,8 @@ class ResultReportTests(unittest.TestCase):
             self.assertIn("boolean_expressions", text)
             self.assertIn("samples=250", text)
             self.assertIn("http://127.0.0.1:8091/v1/completions", text)
+            self.assertIn("Prompt tokens   : 1000", text)
+            self.assertIn("Evaluator rate  : 10.0 total token/s", text)
             svg = Path(temp) / "summary.svg"
             REPORT.write_svg(lines, svg)
             self.assertIn("<svg", svg.read_text(encoding="utf-8"))

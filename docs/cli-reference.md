@@ -84,5 +84,6 @@ external-scheduler flow.
 | `eval-manager inspect <path>` | Validate and render the same product for humans |
 | `eval-manager inspect <path> --format json` | Return the inspection report for automation |
 
-See [Final result product protocol](result-product.md) for JSON documents, the
-Python consumer API, Batch products, and TXT/SVG projections.
+See [Final result product protocol](result-product.md) for JSON documents,
+optional exact token usage and Evaluator timing, the Python consumer API, Batch
+products, and TXT/SVG projections.

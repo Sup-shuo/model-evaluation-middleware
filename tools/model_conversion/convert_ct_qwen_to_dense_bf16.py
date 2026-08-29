@@ -56,12 +56,13 @@ except ImportError:
     _CT_DECOMPRESS_API = "weight_instance"
 from compressed_tensors.quantization import QuantizationScheme
 from safetensors import safe_open
-from transformers import (
-    Qwen3_5Config,
-    Qwen3_5ForConditionalGeneration,
-    Qwen3VLConfig,
-    Qwen3VLForConditionalGeneration,
-)
+from transformers import Qwen3VLConfig, Qwen3VLForConditionalGeneration
+
+try:
+    from transformers import Qwen3_5Config, Qwen3_5ForConditionalGeneration
+except ImportError:
+    Qwen3_5Config = None
+    Qwen3_5ForConditionalGeneration = None
 from transformers.utils.quantization_config import CompressedTensorsConfig
 
 
@@ -74,15 +75,16 @@ AUX_SUFFIXES = (
 )
 
 ARCHITECTURE_CLASSES = {
-    "Qwen3_5ForConditionalGeneration": (
-        Qwen3_5Config,
-        Qwen3_5ForConditionalGeneration,
-    ),
     "Qwen3VLForConditionalGeneration": (
         Qwen3VLConfig,
         Qwen3VLForConditionalGeneration,
     ),
 }
+if Qwen3_5Config is not None and Qwen3_5ForConditionalGeneration is not None:
+    ARCHITECTURE_CLASSES["Qwen3_5ForConditionalGeneration"] = (
+        Qwen3_5Config,
+        Qwen3_5ForConditionalGeneration,
+    )
 
 
 def decompress_weight(module_state: dict[str, torch.Tensor], scheme: QuantizationScheme) -> torch.Tensor:
@@ -263,11 +265,33 @@ def main() -> int:
             absent = [key for key in companions if key not in source_locations]
             if absent:
                 raise RuntimeError(f"missing packed companions for {packed_key}: {absent}")
+        text_config_json = source_config_json.get("text_config") or {}
+        tie_word_embeddings = bool(
+            source_config_json.get("tie_word_embeddings")
+            or text_config_json.get("tie_word_embeddings")
+        )
+        embedding_key = "model.language_model.embed_tokens.weight"
+        output_key = "lm_head.weight"
+        if (
+            tie_word_embeddings
+            and embedding_key in source_locations
+            and output_key in source_locations
+        ):
+            embedding_weight = read_tensor(source_locations, embedding_key)
+            output_weight = read_tensor(source_locations, output_key)
+            if not torch.equal(embedding_weight, output_weight):
+                raise RuntimeError(
+                    "checkpoint declares tied word embeddings but stored "
+                    "embedding/lm_head tensors differ"
+                )
+            del embedding_weight, output_weight
+            gc.collect()
         log(
             "source_preflight_ok",
             tensors=len(source_locations),
             packed_modules=len(packed_prefixes),
             symmetric=weights.symmetric,
+            tie_word_embeddings=tie_word_embeddings,
         )
 
         # Build the unquantized target contract from the correct architecture.
@@ -276,8 +300,10 @@ def main() -> int:
             delattr(clean_config, "quantization_config")
         clean_config.dtype = torch.bfloat16
         clean_config._name_or_path = ""
+        clean_config.tie_word_embeddings = tie_word_embeddings
         if getattr(clean_config, "text_config", None) is not None:
             clean_config.text_config.dtype = torch.bfloat16
+            clean_config.text_config.tie_word_embeddings = tie_word_embeddings
         if getattr(clean_config, "vision_config", None) is not None:
             clean_config.vision_config.dtype = torch.bfloat16
         with init_empty_weights():
@@ -291,7 +317,7 @@ def main() -> int:
             "model.language_model.embed_tokens.weight",
             "lm_head.weight",
         }
-        if clean_config.tie_word_embeddings and tied_embedding_keys <= set(target_shapes):
+        if tie_word_embeddings and tied_embedding_keys <= set(target_shapes):
             target_parameter_count -= __import__("math").prod(
                 target_shapes["lm_head.weight"]
             )
@@ -457,7 +483,7 @@ def main() -> int:
             output_locations,
             alias_metadata,
             set(target_shapes),
-            clean_config.tie_word_embeddings,
+            tie_word_embeddings,
         )
         effective_output_keys = set(output_locations) | set(aliases)
         if effective_output_keys != set(target_shapes):

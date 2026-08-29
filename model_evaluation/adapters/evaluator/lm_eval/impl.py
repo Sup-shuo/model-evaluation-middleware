@@ -123,7 +123,18 @@ def plan_evaluate(i,c):
     env,_=_execution_env(i,c,params,framework_root)
     secret_env={}
     if proxy_mode:
-        runner=['python',str(Path(__file__).with_name('runner.py')),'--completion-url',completion,'--auth-mode',proxy_mode,'--timeout',str(int(params.get('request_timeout',600)))]
+        runner=[
+            'python',
+            str(Path(__file__).with_name('runner.py')),
+            '--completion-url',
+            completion,
+            '--auth-mode',
+            proxy_mode,
+            '--usage-file',
+            str(out/'token_usage.json'),
+            '--timeout',
+            str(int(params.get('request_timeout',600))),
+        ]
         if tok_backend=='remote':
             info=(proto.get('tokenizer_info') or {}).get('url'); tokenize=(proto.get('tokenize') or {}).get('url'); detokenize=(proto.get('detokenize') or {}).get('url')
             if not info or not tokenize or not detokenize: raise AdapterError('COMPATIBILITY_ERROR','remote lm-eval tokenizer requires tokenizer_info/tokenize/detokenize service protocols')
@@ -315,6 +326,37 @@ def _sample_artifacts(root):
             artifacts.append({'path':str(path.resolve()),'media_type':'application/x-ndjson'})
     return artifacts
 
+
+def _token_usage(root):
+    path=Path(root)/'token_usage.json'
+    if not path.is_file() or path.is_symlink():
+        return None
+    try:
+        value=json_loads(path.read_text(encoding='utf-8'))
+    except Exception:
+        return None
+    if not isinstance(value,dict):
+        return None
+    counts={
+        name:_integer(value.get(name))
+        for name in ('prompt_tokens','completion_tokens','total_tokens')
+    }
+    complete=bool(value.get('complete')) and all(
+        item is not None for item in counts.values()
+    )
+    if complete and counts['total_tokens'] != (
+        counts['prompt_tokens'] + counts['completion_tokens']
+    ):
+        complete=False
+    if not complete:
+        counts={name:None for name in counts}
+    return {
+        'source':str(value.get('source') or 'openai_response_usage'),
+        'complete':complete,
+        **counts,
+    }
+
+
 def normalize(i,c):
     p,obj=_find_result(i['raw_result_root']); task=i['task']; run=i['run_metadata']
     row,source=_select_result_row(obj,task['task_id'])
@@ -337,6 +379,8 @@ def normalize(i,c):
     result={"schema_version":"1.0","run_id":run['run_id'],"model":run['model'],"benchmark":run['benchmark'],"framework":"lm_eval","metrics":metrics,"raw_result":{"path":str(p),"media_type":"application/json"},"breakdowns":_result_breakdowns(obj,task['task_id'],source,metrics,native_metrics,namespace,metric_map),"metadata":{"task_id":task['task_id'],"result_scope":source,"protocol_fingerprint":task['protocol_fingerprint'],"metric_namespace":namespace}}
     sample_artifacts=_sample_artifacts(i['raw_result_root'])
     if sample_artifacts: result['sample_artifacts']=sample_artifacts
+    token_usage=_token_usage(i['raw_result_root'])
+    if token_usage is not None: result['token_usage']=token_usage
     return result
 
 def snapshot(i,c):

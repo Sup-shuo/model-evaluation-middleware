@@ -46,6 +46,9 @@
       "items": {
         "$ref": "#/$defs/sampleArtifact"
       }
+    },
+    "token_usage": {
+      "$ref": "performance.schema.json#/$defs/tokenUsage"
     }
   },
   "$defs": {

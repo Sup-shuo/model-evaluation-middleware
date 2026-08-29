@@ -13,7 +13,8 @@
 - 规划并管理 Backend/Evaluator 进程；
 - 在模型启动前检查依赖、任务和缓存；
 - 执行 Dataset → Binding → Evaluator 链路；
-- 输出 `result.json`、逐任务 `metrics.json`、框架原始结果、可选 samples、实际配置和日志；
+- 输出 `result.json`、逐任务 `metrics.json`、可选 `performance.json`、
+  `terminal.json`/`failure.json`、框架原始结果、可选 samples、实际配置和日志；
 - 固定影响随机性的运行参数，记录当前能够探测的关键复现配置与版本。
 
 项目不负责：
@@ -247,7 +248,10 @@ Evaluator 的 normalize 返回：
 - `breakdowns.summary/groups/tasks`；
 - 原始框架结果引用；
 - 可选 sample artifacts；
+- 可选、由评测端点直接返回的完整 `token_usage`；
 - 最少量实现 metadata。
+
+`token_usage` 任一计数缺失时不得推算，Core 只把完整计数投影为 `performance.json`。
 
 `breakdowns` 是正式产品字段，不放在 metadata：
 
@@ -284,19 +288,24 @@ Evaluator 的 normalize 返回：
 
 ## 7. 结果产品边界
 
-默认单次运行目录是：
+成功运行的默认目录是：
 
 ```text
-results/<model>_<benchmark>_<Beijing short timestamp>/
+results/<platform>_<model-id>_<backend>_<benchmark-id>_YYMMDD-HHMM/
 ├── result.json
 ├── metrics.json
+├── performance.json       # 可选；Evaluator 耗时与端点精确 token 统计
+├── terminal.json
 ├── raw/
-├── samples/        # 可选
+├── samples/                # 可选
 ├── config/
 ├── logs/
-├── terminal.json
-└── failure.json    # 仅失败
+├── result-summary.txt      # 可选的人类可读投影
+└── result-summary.svg      # 可选的人类可读投影
 ```
+
+失败运行增加 `failure.json`；`terminal.json` 始终是公开完成标记。目录名使用北京时间，
+时间戳保留两位年份、月、日、小时和分钟。
 
 ### result.json
 
@@ -305,6 +314,11 @@ results/<model>_<benchmark>_<Beijing short timestamp>/
 ### metrics.json
 
 CanonicalResult `breakdowns` 的稳定投影：summary、groups、tasks。组任务必须完整保留每个子任务，而不是只交付一个平均分。字段适合人读和脚本消费，不携带不必要的实现快照。
+
+### performance.json
+
+Evaluator 子进程耗时与评测端点返回的精确 token 用量。它不包含模型服务启动、清理或
+TXT/SVG 渲染时间；端点没有完整计数时，相应 token 与吞吐字段保持 `null`，不能从日志速率推算。
 
 ### raw/
 
@@ -324,8 +338,8 @@ ExecutionPlan、preflight、Dataset/Task staging 和进程状态位于隐藏的 
 
 Batch 产品应聚合 child `result.json` 和 `metrics.json`，同时保留 child run 路径。恢复执行所需的内部状态与面向用户的 batch summary 分离。
 
-四个根层产品文件分别由 `result.schema.json`、`metrics.schema.json`、
-`terminal.schema.json` 和 `failure.schema.json` 定义。Core 在写入时验证单文件 Schema；
+`result.json`、`metrics.json`、`performance.json`、`terminal.json`、`failure.json`、
+`config/run_config.json` 和 `config/runtime_versions.json` 均有独立 Schema。Core 在写入时验证单文件 Schema；
 `result-check`/`inspect` 进一步验证跨文件身份、指标、outcome 规则和公开 artifact 路径。
 这些是产品兼容性检查，不是来源真实性或防篡改验证。
 

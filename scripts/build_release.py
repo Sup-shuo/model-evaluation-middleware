@@ -268,6 +268,7 @@ def check_installable_bundle(root: Path) -> None:
             installed / "schemas" / "execution_plan.schema.json",
             installed / "schemas" / "resolved_execution.schema.json",
             installed / "schemas" / "run_config.schema.json",
+            installed / "schemas" / "performance.schema.json",
             installed / "schemas" / "runtime_versions.schema.json",
             installed / "schemas" / "user" / "matrix_plan.schema.json",
             installed / "schemas" / "user" / "matrix_execution_export.schema.json",

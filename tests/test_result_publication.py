@@ -68,7 +68,31 @@ class ResultPublicationTests(unittest.TestCase):
                 },
                 "sample_artifacts": [{"path": str(sample), "media_type": "application/x-ndjson"}],
             }
-            published = publish_result(run, raw_root, result)
+            performance = {
+                "schema_version": "1.0",
+                "run_id": "run",
+                "model": "m",
+                "benchmark": "bbh",
+                "framework": "lm_eval",
+                "measurement_scope": "evaluator_process",
+                "evaluation_started_at": "2026-08-13T12:00:00+08:00",
+                "evaluation_finished_at": "2026-08-13T12:00:10+08:00",
+                "evaluation_duration_seconds": 10.0,
+                "token_usage": {
+                    "source": "openai_response_usage",
+                    "complete": True,
+                    "prompt_tokens": 80,
+                    "completion_tokens": 20,
+                    "total_tokens": 100,
+                },
+                "tokens_per_second": 10.0,
+            }
+            published = publish_result(
+                run,
+                raw_root,
+                result,
+                performance=performance,
+            )
             metrics = json.loads((run / "metrics.json").read_text())
             saved = json.loads((run / "result.json").read_text())
 
@@ -80,6 +104,8 @@ class ResultPublicationTests(unittest.TestCase):
             self.assertTrue((run / "raw" / "framework_result.json").is_file())
             self.assertEqual((run / "raw" / "framework_result.json").read_bytes(), raw.read_bytes())
             self.assertTrue((run / "samples" / "task.jsonl").is_file())
+            saved_performance = json.loads((run / "performance.json").read_text())
+            self.assertEqual(saved_performance["token_usage"]["total_tokens"], 100)
 
 
 if __name__ == "__main__":

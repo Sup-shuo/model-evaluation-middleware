@@ -43,13 +43,13 @@
   <path d="M776 284H385v166" stroke="#64748b" stroke-width="1.8" fill="none" marker-end="url(#arrow)"/>
   <text class="ui small" x="796" y="278">EXECUTION PLAN</text>
 
-  <text class="ui small" x="365" y="307">INFERENCE PATH</text>
+  <text class="ui small" x="400" y="307">INFERENCE PATH</text>
   <rect x="365" y="322" width="822" height="92" rx="17" fill="#fff" stroke="#bae6fd"/>
   <rect x="400" y="337" width="360" height="62" rx="13" fill="#ecfeff" stroke="#a5f3fc"/><text class="ui h2" x="580" y="373" text-anchor="middle">Inference adapters</text>
   <path d="M760 368h90" stroke="#0891b2" stroke-width="1.8" marker-end="url(#arrow)"/>
   <rect x="854" y="337" width="304" height="62" rx="13" fill="#dcfce7" stroke="#86efac"/><text class="ui h2" x="1006" y="373" text-anchor="middle">Model service</text>
 
-  <text class="ui small" x="365" y="441">EVALUATION PATH</text>
+  <text class="ui small" x="400" y="441">EVALUATION PATH</text>
   <rect x="365" y="456" width="822" height="92" rx="17" fill="#fff" stroke="#99f6e4"/>
   <rect x="400" y="471" width="360" height="62" rx="13" fill="#f0fdfa" stroke="#99f6e4"/><text class="ui h2" x="580" y="507" text-anchor="middle">Evaluation adapters</text>
   <path d="M760 502h90" stroke="#0f766e" stroke-width="1.8" marker-end="url(#arrow)"/>
@@ -57,7 +57,7 @@
 
   <!-- Evaluation calls the model service; neither is reimplemented here. -->
   <path d="M1146 471C1192 446 1192 424 1146 399" fill="none" stroke="#0f766e" stroke-width="1.7" stroke-dasharray="5 5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <text class="ui small" x="1173" y="432" text-anchor="middle" transform="rotate(-90 1173 432)">REQUEST / RESPONSE</text>
+  <text class="ui small" x="1210" y="432" text-anchor="middle" transform="rotate(-90 1210 432)">REQUEST / RESPONSE</text>
 
   <!-- Stable result product. -->
   <path d="M1187 502h84" fill="none" stroke="#64748b" stroke-width="1.9" marker-end="url(#arrow)"/>

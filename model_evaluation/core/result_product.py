@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from model_evaluation.core.errors import ResultProductError
+from model_evaluation.core.performance import validate_performance_values
 from model_evaluation.core.serialization import json_loads_strict
 
 
@@ -12,6 +13,7 @@ FINAL_PRODUCT_FILES = {
     "runtime_versions": "config/runtime_versions.json",
     "result": "result.json",
     "metrics": "metrics.json",
+    "performance": "performance.json",
     "terminal": "terminal.json",
     "failure": "failure.json",
 }
@@ -120,6 +122,7 @@ def inspect_run_product(run_dir: str | Path, schemas) -> dict:
     failure_path = root / FINAL_PRODUCT_FILES["failure"]
     result_path = root / FINAL_PRODUCT_FILES["result"]
     metrics_path = root / FINAL_PRODUCT_FILES["metrics"]
+    performance_path = root / FINAL_PRODUCT_FILES["performance"]
 
     if outcome == "success" and failure_path.exists():
         raise ResultProductError("successful run must not contain failure.json")
@@ -129,6 +132,8 @@ def inspect_run_product(run_dir: str | Path, schemas) -> dict:
         raise ResultProductError("result.json and metrics.json must be published together")
     if outcome == "success" and not result_path.is_file():
         raise ResultProductError("successful run must contain result.json and metrics.json")
+    if performance_path.is_file() and not result_path.is_file():
+        raise ResultProductError("performance.json requires result.json and metrics.json")
 
     failure = None
     if failure_path.is_file():
@@ -142,6 +147,7 @@ def inspect_run_product(run_dir: str | Path, schemas) -> dict:
 
     result = None
     metrics = None
+    performance = None
     artifact_count = 0
     if result_path.is_file():
         result = _load(result_path)
@@ -191,6 +197,33 @@ def inspect_run_product(run_dir: str | Path, schemas) -> dict:
                 metadata["finished_at"],
                 terminal["finished_at"],
             )
+        if performance_path.is_file():
+            performance = _load(performance_path)
+            schemas.validate("performance", performance)
+            for key in ("run_id", "model", "benchmark", "framework"):
+                _same(f"performance.{key}", performance[key], result[key])
+            try:
+                validate_performance_values(performance)
+            except ValueError as exc:
+                raise ResultProductError(
+                    f"invalid performance product: {exc}"
+                ) from exc
+            _not_after(
+                "evaluation start",
+                terminal["started_at"],
+                performance["evaluation_started_at"],
+            )
+            _not_after(
+                "evaluation interval",
+                performance["evaluation_started_at"],
+                performance["evaluation_finished_at"],
+            )
+            if "finished_at" in metadata:
+                _not_after(
+                    "evaluation completion",
+                    performance["evaluation_finished_at"],
+                    metadata["finished_at"],
+                )
 
     return {
         "ok": True,
@@ -210,6 +243,7 @@ def inspect_run_product(run_dir: str | Path, schemas) -> dict:
         "groups": len(metrics.get("groups") or {}) if metrics else 0,
         "tasks": len(metrics.get("tasks") or {}) if metrics else 0,
         "effective_samples": _effective_samples(metrics) if metrics else None,
+        "performance": performance,
         "artifacts": artifact_count,
         "runtime_recorded": runtime_versions is not None,
         "failure_stage": failure.get("stage") if failure else None,

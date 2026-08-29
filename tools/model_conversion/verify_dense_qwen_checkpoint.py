@@ -24,17 +24,27 @@ importlib.util.find_spec = _verification_find_spec
 
 import torch
 from accelerate import init_empty_weights
-from compressed_tensors.compressors.pack_quantized.base import (
-    PackedQuantizationCompressor,
-)
+try:
+    from compressed_tensors.compressors.pack_quantized.base import (
+        PackedQuantizationCompressor,
+    )
+
+    _CT_DECOMPRESS_API = "state_dict_classmethod"
+except ImportError:
+    from compressed_tensors.compressors.quantized_compressors.pack_quantized import (
+        PackedQuantizationCompressor,
+    )
+
+    _CT_DECOMPRESS_API = "weight_instance"
 from compressed_tensors.quantization import QuantizationScheme
 from safetensors import safe_open
-from transformers import (
-    Qwen3_5Config,
-    Qwen3_5ForConditionalGeneration,
-    Qwen3VLConfig,
-    Qwen3VLForConditionalGeneration,
-)
+from transformers import Qwen3VLConfig, Qwen3VLForConditionalGeneration
+
+try:
+    from transformers import Qwen3_5Config, Qwen3_5ForConditionalGeneration
+except ImportError:
+    Qwen3_5Config = None
+    Qwen3_5ForConditionalGeneration = None
 
 
 AUX_SUFFIXES = (
@@ -46,15 +56,22 @@ AUX_SUFFIXES = (
 )
 
 ARCHITECTURE_CLASSES = {
-    "Qwen3_5ForConditionalGeneration": (
-        Qwen3_5Config,
-        Qwen3_5ForConditionalGeneration,
-    ),
     "Qwen3VLForConditionalGeneration": (
         Qwen3VLConfig,
         Qwen3VLForConditionalGeneration,
     ),
 }
+if Qwen3_5Config is not None and Qwen3_5ForConditionalGeneration is not None:
+    ARCHITECTURE_CLASSES["Qwen3_5ForConditionalGeneration"] = (
+        Qwen3_5Config,
+        Qwen3_5ForConditionalGeneration,
+    )
+
+
+def decompress_weight(module_state, scheme):
+    if _CT_DECOMPRESS_API == "state_dict_classmethod":
+        return PackedQuantizationCompressor.decompress(module_state, scheme)["weight"]
+    return PackedQuantizationCompressor().decompress_weight(module_state, scheme.weights)
 
 
 def load_json(path: Path):
@@ -210,9 +227,7 @@ def main():
                 source_name = prefix + suffix
                 if source_name in source_locations:
                     module_state[suffix] = read_tensor(source_locations, source_name)
-            reference = PackedQuantizationCompressor.decompress(
-                module_state, scheme
-            )["weight"].to(torch.bfloat16)
+            reference = decompress_weight(module_state, scheme).to(torch.bfloat16)
             decompressed += 1
         if not torch.equal(output, reference):
             delta = float((output.float() - reference.float()).abs().max())

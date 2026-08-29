@@ -1217,6 +1217,11 @@ overrides:
             out=lm_eval_impl.plan_evaluate({'service':service,'task':task,'evaluation':evaluation,'output_root':'/tmp/out','run_metadata':{}},{})
         proc=out['process']
         self.assertEqual(proc['metadata']['transport_proxy'],'inject')
+        self.assertIn('--usage-file',proc['argv'])
+        self.assertEqual(
+            proc['argv'][proc['argv'].index('--usage-file')+1],
+            '/tmp/out/token_usage.json',
+        )
         self.assertEqual(proc['secret_env']['MODEL_EVAL_UPSTREAM_API_KEY'],'secret://env/MODEL_API_KEY')
         self.assertNotIn('OPENAI_API_KEY',proc.get('secret_env',{}))
 
@@ -2224,6 +2229,7 @@ server.serve_forever()
                 run_dir=app.orchestrator(results_root=root/'results',cache_root=root/'cache').execute(plan)
             result=json_loads_strict((run_dir/'result.json').read_text())
             metrics=json_loads_strict((run_dir/'metrics.json').read_text())
+            performance=json_loads_strict((run_dir/'performance.json').read_text())
             terminal=json_loads_strict((run_dir/'terminal.json').read_text())
             run_config=json_loads_strict((run_dir/'config'/'run_config.json').read_text())
             runtime_versions=json_loads_strict((run_dir/'config'/'runtime_versions.json').read_text())
@@ -2231,6 +2237,9 @@ server.serve_forever()
             self.assertEqual(metrics['model'],'e2e-catalog-model')
             self.assertEqual(result['metrics']['contract_ok']['value'],1)
             self.assertEqual(metrics['summary']['contract_ok']['value'],1)
+            self.assertEqual(performance['measurement_scope'],'evaluator_process')
+            self.assertFalse(performance['token_usage']['complete'])
+            self.assertIsNone(performance['token_usage']['total_tokens'])
             self.assertEqual(terminal['cleanup']['status'],'clean')
             self.assertEqual(terminal['cleanup']['backend']['graceful']['result'],'success')
             self.assertEqual(terminal['outcome'],'success')

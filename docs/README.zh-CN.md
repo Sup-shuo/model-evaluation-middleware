@@ -184,6 +184,7 @@ eval-manager matrix-export /tmp/matrix-plan.json \
 results/<run-id>/
 ├── result.json
 ├── metrics.json
+├── performance.json          # 评测进程耗时及可用时的精确 token 统计
 ├── terminal.json
 ├── raw/
 ├── samples/
@@ -194,6 +195,8 @@ results/<run-id>/
 ```
 
 失败运行增加 `failure.json`。每个公共 JSON 都有独立 Schema，并执行跨文件一致性检查。
+`performance.json` 只统计 Evaluator 子进程；`tokens_per_second` 是接口返回的
+总 token 数除以该耗时，不代表模型纯解码速度。无法获得精确计数时字段为 `null`。
 [`examples/result_example/`](../examples/result_example/) 提供完整合成示例；下图来自真实
 MLU 完整 BBH 结果，只替换了用户目录。
 
@@ -208,6 +211,7 @@ run = load_run("results/<run-id>")
 summary = run.metrics.summary()
 tasks = run.metrics.tasks()
 runtime = run.runtime()
+performance = run.performance()
 artifacts = run.artifacts()
 ```
 

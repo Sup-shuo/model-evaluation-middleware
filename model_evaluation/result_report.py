@@ -28,6 +28,10 @@ def load_object(path: Path) -> dict[str, Any]:
     return value
 
 
+def load_optional_object(path: Path) -> dict[str, Any] | None:
+    return load_object(path) if path.is_file() else None
+
+
 def metric_value(entry: object) -> str:
     if not isinstance(entry, dict) or not isinstance(entry.get("value"), (int, float)):
         return "N/A"
@@ -96,6 +100,23 @@ def environment_lines(
     ]
 
 
+def _performance_lines(performance: dict[str, Any]) -> list[str]:
+    usage = performance.get("token_usage") or {}
+
+    def display(value: object) -> str:
+        return str(value) if isinstance(value, (int, float)) else "N/A"
+
+    return [
+        "Performance",
+        f"  Evaluation time : {display(performance.get('evaluation_duration_seconds'))} s",
+        f"  Prompt tokens   : {display(usage.get('prompt_tokens'))}",
+        f"  Completion tokens: {display(usage.get('completion_tokens'))}",
+        f"  Total tokens    : {display(usage.get('total_tokens'))}",
+        f"  Evaluator rate  : {display(performance.get('tokens_per_second'))} total token/s",
+        f"  Token source    : {usage.get('source', 'unavailable')}",
+    ]
+
+
 def render_lines(run_dir: Path) -> list[str]:
     run_dir = run_dir.resolve()
     metrics = load_object(run_dir / "metrics.json")
@@ -103,6 +124,7 @@ def render_lines(run_dir: Path) -> list[str]:
     terminal = load_object(run_dir / "terminal.json")
     run_config = load_object(run_dir / "config" / "run_config.json")
     versions = load_object(run_dir / "config" / "runtime_versions.json")
+    performance = load_optional_object(run_dir / "performance.json")
 
     if terminal.get("outcome") != "success":
         raise ValueError(f"summary rendering requires a successful run: {run_dir}")
@@ -119,6 +141,8 @@ def render_lines(run_dir: Path) -> list[str]:
         *environment_lines(run_dir, run_config, versions),
         "",
     ]
+    if performance is not None:
+        lines.extend([*_performance_lines(performance), ""])
 
     tasks = metrics.get("tasks") or {}
     rows: list[tuple[str, str, str, str, str, str, str]] = []

@@ -2,8 +2,8 @@
 
 ## Supported version
 
-Security fixes are applied to the latest published alpha. Older alpha snapshots
-are not maintained.
+Security fixes are applied to the latest supported release. Superseded
+prereleases and unsupported releases are not maintained.
 
 ## Reporting
 

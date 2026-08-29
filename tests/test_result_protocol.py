@@ -240,6 +240,7 @@ class ResultProtocolTests(unittest.TestCase):
             _write(runtime_path, runtime)
             loaded = load_run(run, schemas=self.schemas)
             self.assertEqual(loaded.run_id, run.name)
+            self.assertIsNone(loaded.performance())
             self.assertEqual(loaded.outcome, "success")
             self.assertEqual(loaded.metrics.summary()["accuracy"]["value"], 0.5)
             self.assertEqual(set(loaded.metrics.tasks()), {"task"})
@@ -253,6 +254,43 @@ class ResultProtocolTests(unittest.TestCase):
             summary = loaded.metrics.summary()
             summary["accuracy"]["value"] = 0.0
             self.assertEqual(loaded.metrics.summary()["accuracy"]["value"], 0.5)
+
+    def test_optional_performance_product_is_checked_and_exposed_by_sdk(self):
+        with tempfile.TemporaryDirectory() as td:
+            run = self._success(Path(td))
+            performance = {
+                "schema_version": "1.0",
+                "run_id": run.name,
+                "model": "model",
+                "benchmark": "bbh",
+                "framework": "lm_eval",
+                "measurement_scope": "evaluator_process",
+                "evaluation_started_at": "2026-08-15T12:00:10+08:00",
+                "evaluation_finished_at": "2026-08-15T12:00:40+08:00",
+                "evaluation_duration_seconds": 25.0,
+                "token_usage": {
+                    "source": "openai_response_usage",
+                    "complete": True,
+                    "prompt_tokens": 80,
+                    "completion_tokens": 20,
+                    "total_tokens": 100,
+                },
+                "tokens_per_second": 4.0,
+            }
+            _write(run / "performance.json", performance)
+            report = inspect_run_product(run, self.schemas)
+            self.assertEqual(report["performance"]["token_usage"]["total_tokens"], 100)
+
+            loaded = load_run(run, schemas=self.schemas)
+            view = loaded.performance()
+            self.assertEqual(view["tokens_per_second"], 4.0)
+            view["tokens_per_second"] = 0.0
+            self.assertEqual(loaded.performance()["tokens_per_second"], 4.0)
+
+            performance["tokens_per_second"] = 99.0
+            _write(run / "performance.json", performance)
+            with self.assertRaisesRegex(ResultProductError, "tokens_per_second"):
+                inspect_run_product(run, self.schemas)
 
     def test_python_result_sdk_preserves_run_symlink_rejection(self):
         with tempfile.TemporaryDirectory() as td:

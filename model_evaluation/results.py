@@ -56,6 +56,7 @@ class RunProduct:
         report: dict,
         result: dict | None,
         metrics: dict | None,
+        performance: dict | None,
         terminal: dict,
         failure: dict | None,
         run_config: dict | None,
@@ -68,6 +69,7 @@ class RunProduct:
         self._failure = copy.deepcopy(failure)
         self._run_config = copy.deepcopy(run_config)
         self._runtime_versions = copy.deepcopy(runtime_versions)
+        self._performance = copy.deepcopy(performance)
         self.metrics = MetricsView(metrics)
 
     @property
@@ -95,6 +97,9 @@ class RunProduct:
             "run_config": copy.deepcopy(self._run_config),
             "runtime_versions": copy.deepcopy(self._runtime_versions),
         }
+
+    def performance(self) -> dict | None:
+        return copy.deepcopy(self._performance)
 
     def artifacts(self) -> tuple[Artifact, ...]:
         rows: list[Artifact] = []
@@ -145,6 +150,7 @@ def load_run(path: str | Path, *, schemas: SchemaStore | None = None) -> RunProd
         report=report,
         result=_load_optional(root / "result.json"),
         metrics=_load_optional(root / "metrics.json"),
+        performance=_load_optional(root / "performance.json"),
         terminal=_load_optional(root / "terminal.json") or {},
         failure=_load_optional(root / "failure.json"),
         run_config=_load_optional(root / "config" / "run_config.json"),

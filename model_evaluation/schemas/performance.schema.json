@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "performance.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "model",
+    "benchmark",
+    "framework",
+    "measurement_scope",
+    "evaluation_started_at",
+    "evaluation_finished_at",
+    "evaluation_duration_seconds",
+    "token_usage",
+    "tokens_per_second"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "run_id": {"$ref": "common.schema.json#/$defs/id"},
+    "model": {"$ref": "common.schema.json#/$defs/id"},
+    "benchmark": {"$ref": "common.schema.json#/$defs/id"},
+    "framework": {"$ref": "common.schema.json#/$defs/id"},
+    "measurement_scope": {"const": "evaluator_process"},
+    "evaluation_started_at": {"type": "string", "format": "date-time"},
+    "evaluation_finished_at": {"type": "string", "format": "date-time"},
+    "evaluation_duration_seconds": {"type": "number", "minimum": 0},
+    "token_usage": {"$ref": "#/$defs/tokenUsage"},
+    "tokens_per_second": {
+      "type": ["number", "null"],
+      "minimum": 0
+    }
+  },
+  "$defs": {
+    "nullableCount": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "tokenUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "complete",
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens"
+      ],
+      "properties": {
+        "source": {"type": "string", "minLength": 1},
+        "complete": {"type": "boolean"},
+        "prompt_tokens": {"$ref": "#/$defs/nullableCount"},
+        "completion_tokens": {"$ref": "#/$defs/nullableCount"},
+        "total_tokens": {"$ref": "#/$defs/nullableCount"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"complete": {"const": true}}},
+          "then": {
+            "properties": {
+              "prompt_tokens": {"type": "integer"},
+              "completion_tokens": {"type": "integer"},
+              "total_tokens": {"type": "integer"}
+            }
+          },
+          "else": {
+            "properties": {
+              "prompt_tokens": {"type": "null"},
+              "completion_tokens": {"type": "null"},
+              "total_tokens": {"type": "null"}
+            }
+          }
+        }
+      ]
+    }
+  }
+}
