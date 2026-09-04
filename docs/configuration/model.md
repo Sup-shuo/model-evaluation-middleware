@@ -22,6 +22,10 @@ backends:
   vllm:
     max_model_len: 4096
     trust_remote_code: true
+  transformers:
+    dtype: bfloat16
+    max_model_len: 4096
+    trust_remote_code: true
 
 provenance:
   policy: migration
@@ -44,9 +48,11 @@ quantization, context length, chat template, trust-remote-code, and
 Backend-specific loading requirements. Keep devices, Runtime roots, executable
 paths, memory policy, and service concurrency in System.
 
-Use Backend namespaces such as `backends.vllm` or `backends.llama_cpp` instead
-of one unscoped parameter set. The selected Backend receives only its own
-loading parameters.
+Use Backend namespaces such as `backends.vllm`, `backends.transformers`,
+`backends.tinyllava`, or `backends.llama_cpp` instead of one unscoped parameter
+set. The selected Backend receives only its own loading parameters. A standard
+`AutoModelForCausalLM` checkpoint normally selects `transformers`; a checkpoint
+whose official API is model-family specific selects that family's Adapter.
 
 ## Quantized and derived material
 

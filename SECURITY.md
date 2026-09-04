@@ -20,3 +20,8 @@ known secrets and cleans only processes it owns. It does not sandbox arbitrary
 third-party Adapter code and does not claim that saved results are cryptographic
 evidence. Run untrusted plugins in an OS/container boundary appropriate for your
 environment.
+
+The built-in Native Backend service has no authentication and defaults to the
+loopback interface. Do not expose it directly to an untrusted network. The
+TinyLLaVA Adapter requires checkpoint-provided Python code, so its model material
+must be treated as executable code and reviewed before use.

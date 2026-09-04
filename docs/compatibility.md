@@ -12,6 +12,8 @@ with a production-validated stack.
 | AMD GPU | ROCm | Adapter contract only | — | Contract-tested |
 | Ascend NPU | CANN | Adapter contract only | — | Contract-tested |
 | OpenAI-compatible service | — | generic OpenAI Adapter | configured evaluator | Contract-tested |
+| Standard CausalLM | selected Runtime | Transformers native service | configured chat/completions evaluator | Contract + loopback protocol smoke |
+| TinyLLaVA Factory checkpoint | selected Runtime | TinyLLaVA family native service | configured chat evaluator | Contract + loopback protocol smoke |
 | NVIDIA A100 | CUDA | existing vLLM OpenAI-compatible service | EvalScope 1.10.0 | Real one-sample GSM8K smoke E2E |
 | Local service | — | Ollama / llama.cpp | configured evaluator | Contract-tested |
 
@@ -42,8 +44,11 @@ and cleanup correctly left the unowned service running. It is an integration
 result, not a representative model score.
 
 “Contract-tested” means manifests, JSON Schema, RPC objects and planning behavior
-are covered. Before production use, run `validate`, `doctor`, a smoke evaluation,
-and the intended benchmark on the target stack.
+are covered. “Loopback protocol smoke” additionally starts the shared Native
+Backend service, probes its declared capabilities and makes a real local request
+with a fake Driver; it does not load model weights. Before production use, run
+`validate`, `doctor`, a smoke evaluation, and the intended benchmark on the
+target stack.
 
 “Hardware-free Mock E2E” means the real Core/Matrix/process/result path ran with
 the loopback reference components and virtual dataset. Its `contract_ok` metric

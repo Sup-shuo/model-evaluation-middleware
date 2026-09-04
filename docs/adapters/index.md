@@ -11,7 +11,7 @@ adding vendor- or framework-name branches to orchestration code.
 | Device | Discover devices and establish visibility | `cpu`, `nvidia`, `mlu`, `metax`, `amd`, `ascend` |
 | Runtime | Resolve SDK/runtime environment facts | `cpu`, `cuda`, `neuware`, `maca`, `rocm`, `cann` |
 | Environment | Resolve interpreter and wrap processes | `current`, `conda`, `venv` |
-| Backend | Preflight, start/attach, probe service, snapshot | `vllm`, `generic_openai`, `ollama`, `llama_cpp`, `reference` |
+| Backend | Preflight, start/attach, probe service, snapshot | `vllm`, `transformers`, `tinyllava`, `generic_openai`, `ollama`, `llama_cpp`, `reference` |
 | Dataset | Resolve, prepare, verify, snapshot data | `bbh_local`, `local_files`, `virtual` |
 | Binding | Translate Benchmark + Dataset into framework tasks | `lm_eval`, `lm_eval.bbh`, `evalscope`, `reference_eval` |
 | Evaluator | Preflight, plan evaluation, normalize, snapshot | `lm_eval`, `evalscope`, `reference_eval` |
@@ -59,6 +59,10 @@ Runtime invocation still occurs through the Adapter subprocess protocol.
 - New accelerator: usually Device + Runtime; reuse an existing Backend if its
   vendor build provides the same service contract.
 - New inference engine: Backend Adapter; do not duplicate evaluator behavior.
+- Standard Transformers CausalLM: Model YAML plus the built-in `transformers`
+  Backend.
+- Model with a stable official Python inference API that does not fit a generic
+  engine: a small model-family Backend using the shared Native Backend SDK.
 - New evaluation framework: Evaluator + Binding; reuse Dataset Adapters where
   their artifacts already fit.
 - New dataset source: Dataset Adapter; add a Binding only when framework task

@@ -11,7 +11,7 @@ model.
 
 | Pattern | Example | What it demonstrates |
 |---|---|---|
-| Safetensors model | [`qwen_example.yaml`](../../config/models/qwen_example.yaml) | Local material, architecture, context, and vLLM loading parameters |
+| Safetensors model | [`qwen_example.yaml`](../../config/models/qwen_example.yaml) | Local material, architecture, context, and vLLM/Transformers loading parameters |
 | AWQ / compressed-tensors | [`qwen_awq_example.yaml`](../../config/models/qwen_awq_example.yaml) | Quantization metadata and a device-specific compatibility note |
 | Vision-language model | [`qwen_vl_awq_example.yaml`](../../config/models/qwen_vl_awq_example.yaml) | A minimal multimodal identity without machine paths |
 | MoE mixed precision | [`qwen_moe_nvfp4_example.yaml`](../../config/models/qwen_moe_nvfp4_example.yaml) | Backend-specific mixed-precision handling and distinct derived identities |
@@ -47,6 +47,10 @@ backends:
   vllm:
     max_model_len: 4096
     trust_remote_code: true
+  transformers:
+    dtype: bfloat16
+    max_model_len: 4096
+    trust_remote_code: true
 ```
 
 If System declares `models.root: /data`, the managed Backend resolves this
@@ -68,13 +72,23 @@ backends:
   vllm:
     dtype: bfloat16
     max_model_len: 4096
+  transformers:
+    dtype: bfloat16
+    max_model_len: 4096
+  tinyllava:
+    dtype: float16
+    max_model_len: 4096
   llama_cpp:
     context_length: 4096
 ```
 
 Only the selected Backend receives its namespace. Hardware devices, tensor
 parallel policy, memory utilization, executable paths, ports, and concurrency
-belong to System.
+belong to System. The `transformers` Backend covers standard text
+`AutoModelForCausalLM` checkpoints. `tinyllava` is a separate model-family
+Backend for modern TinyLLaVA Factory checkpoints that embed the official
+`model.chat` implementation; legacy checkpoints without `auto_map` are rejected
+during preflight.
 
 ## Compatibility notes
 

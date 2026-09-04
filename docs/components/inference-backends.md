@@ -1,12 +1,15 @@
 # Inference Backends
 
 A Backend Adapter describes service requirements, preflight checks, startup or
-attachment, readiness, capabilities, and a runtime snapshot. It does not
-reimplement model execution.
+attachment, readiness, capabilities, and a runtime snapshot. It delegates model
+execution to an upstream engine or an official model-family API and does not
+change model algorithms.
 
 | Backend | Upstream | Default mode | Repository validation |
 |---|---|---|---|
 | vLLM | [vllm-project/vllm](https://github.com/vllm-project/vllm) | Managed | Real E2E on NVIDIA, MLU, and MetaX stacks listed in the compatibility matrix |
+| Transformers | [huggingface/transformers](https://github.com/huggingface/transformers) | Managed | Contract + loopback protocol smoke |
+| TinyLLaVA family | Checkpoint-embedded official `model.chat` code | Managed | Contract + loopback protocol smoke |
 | Generic OpenAI-compatible service | External service | External | Contract-tested |
 | Ollama | [ollama/ollama](https://github.com/ollama/ollama) | Managed | Contract-tested |
 | llama.cpp | [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) | Managed | Contract-tested |
@@ -52,6 +55,72 @@ profiles:
 Machine capacity and service settings belong to System. Stable checkpoint
 loading requirements such as `dtype`, `max_model_len`, or
 `trust_remote_code` belong under the selected namespace in Model.
+
+## Python-native model execution
+
+Use `vllm` when the installed engine supports the checkpoint. Use
+`transformers` for a standard text `AutoModelForCausalLM` checkpoint that must
+run directly in Python. Use a model-family Backend such as `tinyllava` only when
+the official inference API has family-specific inputs or outputs.
+
+Both Python-native Backends reuse one internal Native Backend service. It
+provides health and model discovery, OpenAI-compatible Completions/Chat where
+the Driver truthfully supports them, optional tokenize/detokenize endpoints,
+bounded request size and concurrency, and normal managed-process cleanup. YAML
+selects a named Adapter; it cannot name an arbitrary Python module or function.
+
+Register a dedicated inference environment in System:
+
+```yaml
+profiles:
+  environment:
+    transformers-env:
+      type: conda
+      profile: transformers-runtime
+
+  backend:
+    transformers-native:
+      type: transformers
+      environment: transformers-env
+      parameters:
+        port: 8091
+        device: auto
+        dtype: bfloat16
+        allow_cpu_offload: false
+
+    tinyllava-native:
+      type: tinyllava
+      environment: transformers-env
+      parameters:
+        port: 8092
+        device: auto
+        dtype: float16
+        allow_cpu_offload: false
+```
+
+Then put stable loading values in the matching Model namespace:
+
+```yaml
+backends:
+  transformers:
+    max_model_len: 4096
+    trust_remote_code: false
+  tinyllava:
+    max_model_len: 4096
+    trust_remote_code: true
+```
+
+The generic Transformers Driver is text-only. TinyLLaVA accepts at most one
+system message plus one user turn containing text and exactly one `image_url`
+part. Its modern checkpoint must embed `AutoModelForCausalLM` in `auto_map`;
+legacy TinyLLaVA material is rejected before weight loading. Neither path
+enables CPU/disk offload unless System explicitly sets
+`allow_cpu_offload: true`.
+
+The Native Backend service has no authentication and defaults to loopback.
+Keep it on `127.0.0.1` unless an external network boundary provides equivalent
+access control. TinyLLaVA checkpoints execute repository-provided Python code;
+enable that Adapter only for model material you trust.
 
 ## OpenAI-compatible service example
 

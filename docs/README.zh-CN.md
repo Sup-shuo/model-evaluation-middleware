@@ -44,7 +44,7 @@ eval-manager demo --render-summary
 |---|---|
 | Hardware | CPU · NVIDIA GPU · Cambricon MLU · MetaX GPU · AMD GPU · Ascend NPU · … |
 | Runtime | CPU · CUDA · Neuware · MACA · ROCm · CANN · … |
-| 推理 Backend | vLLM · OpenAI-compatible service · Ollama · llama.cpp · Reference Backend · … |
+| 推理 Backend | vLLM · Transformers · 模型家族 Native Service · OpenAI-compatible service · Ollama · llama.cpp · Reference Backend · … |
 | Evaluator | lm-evaluation-harness · EvalScope · Reference Evaluator · … |
 | Dataset / Binding | BBH local · local files · virtual dataset · lm-eval bindings · EvalScope binding · … |
 | 模型物料 | Hugging Face/本地 Safetensors · BF16/FP16 · 量化模型 · Text/VL · 派生物料 · … |
@@ -73,7 +73,7 @@ eval-manager demo --render-summary
 | 完整实机 E2E | NVIDIA A100/CUDA、Cambricon MLU/Neuware；vLLM + lm-eval + 完整 BBH |
 | 实机 smoke E2E | NVIDIA A100/CUDA；已有 vLLM OpenAI-compatible 服务 + EvalScope + GSM8K；MetaX C500/MACA；vLLM-MetaX + lm-eval + BBH |
 | Mock E2E | CPU + Reference Backend/Evaluator + virtual Dataset |
-| Contract-tested | AMD/ROCm、Ascend/CANN、Ollama、llama.cpp、generic OpenAI 等 |
+| Contract-tested | Transformers、TinyLLaVA 家族服务、AMD/ROCm、Ascend/CANN、Ollama、llama.cpp、generic OpenAI 等 |
 
 详细环境与命令见 [NVIDIA A100](validation/nvidia-a100.md)、
 [Cambricon MLU](validation/cambricon-mlu.md) 和

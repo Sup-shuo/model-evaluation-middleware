@@ -1,0 +1,121 @@
+{
+  "$id": "transformers.user_parameters.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "allow_cpu_offload": {
+      "type": "boolean"
+    },
+    "api_model_name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "cache_root": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "dependency_probe_timeout_seconds": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    },
+    "device": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "device_map": {
+      "oneOf": [
+        {
+          "enum": [
+            "auto",
+            "balanced",
+            "balanced_low_0",
+            "sequential"
+          ],
+          "type": "string"
+        },
+        {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "string",
+                "minLength": 1
+              }
+            ]
+          },
+          "minProperties": 1,
+          "type": "object"
+        }
+      ]
+    },
+    "dtype": {
+      "enum": [
+        "auto",
+        "bfloat16",
+        "float16",
+        "float32"
+      ],
+      "type": "string"
+    },
+    "max_concurrent": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "max_model_len": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "max_request_bytes": {
+      "minimum": 1024,
+      "type": "integer"
+    },
+    "model_probe_timeout_seconds": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    },
+    "port": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "pythonhashseed": {
+      "oneOf": [
+        {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "minLength": 1,
+          "type": "string"
+        }
+      ]
+    },
+    "ready_timeout_seconds": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    },
+    "shutdown_timeout_seconds": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    },
+    "tokenizers_parallelism": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "minLength": 1,
+          "type": "string"
+        }
+      ]
+    },
+    "trust_remote_code": {
+      "type": "boolean"
+    }
+  },
+  "type": "object"
+}

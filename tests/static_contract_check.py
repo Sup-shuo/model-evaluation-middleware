@@ -32,7 +32,9 @@ EXPECTED_OPS={
  'evaluator': {'requirements','plan_evaluate','normalize','snapshot'},
 }
 SPEC_SCHEMAS={'models':'model_spec','platforms':'platform_profile','deployments':'deployment_profile','benchmarks':'benchmark_spec','evaluations':'evaluation_profile','runs':'run_spec'}
-MANIFEST_GLOBAL_BUDGET_SECONDS=5.0
+# Keep the whole discovery pass bounded while allowing cold filesystem startup
+# for the growing built-in Adapter set. Each Adapter retains its tighter limit.
+MANIFEST_GLOBAL_BUDGET_SECONDS=12.0
 MANIFEST_PER_ADAPTER_SECONDS=0.5
 
 

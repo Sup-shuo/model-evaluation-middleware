@@ -15,6 +15,10 @@ backends:
   vllm:
     max_model_len: 4096
     trust_remote_code: true
+  transformers:
+    dtype: bfloat16
+    max_model_len: 4096
+    trust_remote_code: true
 
 provenance:
   policy: migration

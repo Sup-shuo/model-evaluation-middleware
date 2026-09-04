@@ -48,7 +48,7 @@ changing Core.
 |---|---|
 | Hardware | CPU · NVIDIA GPU · Cambricon MLU · MetaX GPU · AMD GPU · Ascend NPU · … |
 | Runtime | CPU · CUDA · Neuware · MACA · ROCm · CANN · … |
-| Inference Backend | vLLM · OpenAI-compatible service · Ollama · llama.cpp · Reference Backend · … |
+| Inference Backend | vLLM · Transformers · model-family native service · OpenAI-compatible service · Ollama · llama.cpp · Reference Backend · … |
 | Evaluator | lm-evaluation-harness · EvalScope · Reference Evaluator · … |
 | Dataset / Binding | BBH local · local files · virtual dataset · lm-eval bindings · EvalScope binding · … |
 | Model material | Hugging Face/local Safetensors · BF16/FP16 · quantized checkpoints · text/VL · derived artifacts · … |
@@ -81,7 +81,7 @@ turn them into tamper-proof evidence.
 | Full real-machine E2E | NVIDIA A100/CUDA and Cambricon MLU/Neuware with vLLM + lm-eval + full BBH |
 | Real-machine smoke E2E | NVIDIA A100/CUDA with an existing vLLM OpenAI-compatible service + EvalScope + GSM8K; MetaX C500/MACA with vLLM-MetaX + lm-eval + BBH |
 | Mock E2E | CPU + Reference Backend/Evaluator + virtual Dataset |
-| Contract-tested | AMD/ROCm, Ascend/CANN, Ollama, llama.cpp, generic OpenAI, and other built-ins |
+| Contract-tested | Transformers, TinyLLaVA family service, AMD/ROCm, Ascend/CANN, Ollama, llama.cpp, generic OpenAI, and other built-ins |
 
 Full environment records and commands are available for
 [NVIDIA A100](docs/validation/nvidia-a100.md),

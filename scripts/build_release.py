@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -51,15 +50,6 @@ def excluded_release_path(path: Path) -> bool:
 
 def package_root(root: Path) -> Path:
     return root / "model_evaluation"
-
-
-def sha256_file(path: Path) -> str:
-    """Digest a release archive for transport verification only."""
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def files_under(root: Path):
@@ -254,7 +244,14 @@ def check_installable_bundle(root: Path) -> None:
             installed / "core" / "matrix_export.py",
             installed / "results.py",
             installed / "sdk" / "runtime.py",
+            installed / "sdk" / "native_backend" / "driver.py",
+            installed / "sdk" / "native_backend" / "probe.py",
+            installed / "sdk" / "native_backend" / "service.py",
             installed / "adapters" / "backend" / "vllm" / "adapter",
+            installed / "adapters" / "backend" / "transformers" / "adapter",
+            installed / "adapters" / "backend" / "transformers" / "driver.py",
+            installed / "adapters" / "backend" / "tinyllava" / "adapter",
+            installed / "adapters" / "backend" / "tinyllava" / "driver.py",
             installed / "schemas" / "backend_start_plan.schema.json",
             installed / "schemas" / "backend_preflight_plan.schema.json",
             installed / "schemas" / "preflight_probe_result.schema.json",
@@ -482,7 +479,6 @@ def main() -> None:
             {
                 "ok": True,
                 "zip": str(output),
-                "transport_sha256": sha256_file(output),
             },
             sort_keys=True,
         )

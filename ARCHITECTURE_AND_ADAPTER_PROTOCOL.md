@@ -218,6 +218,14 @@ StartPlan 描述 managed 进程、attach 信息、readiness、shutdown 和兼容
 
 ServiceDescriptor 是能力事实，不只是 URL。它应声明 model identity、ownership、协议端点、auth、tokenizer、context/并发限制和 CapabilitySet。
 
+当通用推理引擎不支持模型、而模型提供稳定的官方 Python 推理 API 时，可以把该
+API 封装为专用 Backend Adapter。它仍必须返回标准 BackendStartPlan 和
+ServiceDescriptor，并复用 Core 的 Environment、ProcessSpec、生命周期和清理机制。
+共享 Native Worker 只是 Backend SDK，不是新的 Adapter kind 或第二套插件系统。
+每个家族 Adapter 固定绑定自己的 Driver；用户 YAML 不得直接指定任意 Python
+module、文件或 entrypoint。Driver 只能声明实际支持的生成、Chat、tokenizer 和
+多模态能力，不能为了兼容 Evaluator 伪造 logprobs、echo 或媒体能力。
+
 ### CapabilitySet / RequirementSet
 
 Backend/Environment 提供事实，Evaluator/Binding 声明需求，Core 做通用比较。Core 不写 `if backend == vllm` 或 `if evaluator == lm_eval` 的兼容分支。
@@ -440,6 +448,10 @@ Conda/venv，必须由各自环境另外导出；Core 不把三种 Python 环境
 ### 新 Backend
 
 实现 requirements、plan_start、probe_service、snapshot；推荐实现结构化 plan_preflight。用户参数、默认 mode、派生参数和 model-location policy 放入 versioned `manifest.user_config`。
+
+标准模型优先复用现有引擎或通用 Transformers Backend。只有官方推理 API 的输入、
+输出或预处理确实属于模型家族时，才新增小型家族 Backend，并复用 Native Worker
+SDK；不要在一个通用 Adapter 内按 architecture 堆叠分支。
 
 ### 新 Dataset
 

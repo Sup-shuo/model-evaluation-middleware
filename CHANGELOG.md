@@ -1,5 +1,21 @@
 # Changelog
 
+## 4.1.0-rc4
+
+- Added managed `transformers` and TinyLLaVA model-family Backend Adapters for
+  checkpoints that cannot use the selected general-purpose inference engine.
+- Added a shared Native Backend SDK with bounded local HTTP serving, truthful
+  capability discovery, OpenAI-compatible text/chat endpoints, optional
+  tokenize/detokenize endpoints, and loopback protocol tests.
+- Kept model-family code behind named Adapters rather than arbitrary YAML
+  entry points, and tightened request limits, numeric generation validation,
+  finite performance values, and TinyLLaVA's single-turn image boundary.
+- Updated architecture, compatibility, Model/System configuration, security,
+  and Adapter documentation, and extended the installed-package release gate
+  to cover the new SDK and Backends.
+- Removed the release builder's unconditional transport digest; release
+  validation remains based on structure, executable behavior, and tests.
+
 ## 4.1.0-rc3
 
 - Added an optional `performance.json` Result Product with Evaluator-process
