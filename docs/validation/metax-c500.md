@@ -3,7 +3,11 @@
 This record intentionally omits usernames, private mount paths, hostnames and run
 identifiers. It documents product coverage, not trusted evidence.
 
-## Environment
+Current coverage includes full text BBH E2E on the recorded stack, including
+result publication and clean owned-process cleanup. The smoke workflow below
+is an onboarding check, separate from full benchmark validation.
+
+## Initial smoke environment
 
 - Accelerator: MetaX C500 64 GiB, one selected device
 - Runtime: MACA 3.8.0.23, driver 3.6.11
@@ -29,6 +33,8 @@ This was a real integration smoke, not a complete benchmark score.
 eval-manager validate --system-config <metax-system> --evaluation-config <bbh-evaluation> --smoke
 eval-manager doctor   --system-config <metax-system> --evaluation-config <bbh-evaluation> --smoke
 eval-manager run      --system-config <metax-system> --evaluation-config <bbh-evaluation> --smoke
+# Omit --smoke for the complete configured benchmark.
+eval-manager run      --system-config <metax-system> --evaluation-config <bbh-evaluation>
 eval-manager inspect  results/<run-id>
 ```
 

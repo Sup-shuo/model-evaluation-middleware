@@ -46,8 +46,8 @@ changing Core.
 
 | Layer | Built-in integrations |
 |---|---|
-| Hardware | CPU · NVIDIA GPU · Cambricon MLU · MetaX GPU · AMD GPU · Ascend NPU · … |
-| Runtime | CPU · CUDA · Neuware · MACA · ROCm · CANN · … |
+| Hardware | CPU · NVIDIA GPU · Cambricon MLU · MetaX GPU · Moore Threads S5000 · AMD GPU · Ascend NPU · … |
+| Runtime | CPU · CUDA · Neuware · MACA · MUSA · ROCm · CANN · … |
 | Inference Backend | vLLM · Transformers · model-family native service · OpenAI-compatible service · Ollama · llama.cpp · Reference Backend · … |
 | Evaluator | lm-evaluation-harness · EvalScope · Reference Evaluator · … |
 | Dataset / Binding | BBH local · local files · virtual dataset · lm-eval bindings · EvalScope binding · … |
@@ -78,15 +78,21 @@ turn them into tamper-proof evidence.
 
 | Level | Current exercised path |
 |---|---|
-| Full real-machine E2E | NVIDIA A100/CUDA and Cambricon MLU/Neuware with vLLM + lm-eval + full BBH |
-| Real-machine smoke E2E | NVIDIA A100/CUDA with an existing vLLM OpenAI-compatible service + EvalScope + GSM8K; MetaX C500/MACA with vLLM-MetaX + lm-eval + BBH |
+| Full real-machine E2E | NVIDIA A100/CUDA, Cambricon MLU/Neuware, MetaX C500/MACA, Moore Threads S5000/MUSA, and Ascend 910B/CANN with the recorded vLLM platform stack + lm-eval + full BBH |
+| Real-machine smoke E2E | NVIDIA A100/CUDA with an existing vLLM OpenAI-compatible service + EvalScope + GSM8K |
 | Mock E2E | CPU + Reference Backend/Evaluator + virtual Dataset |
-| Contract-tested | Transformers, TinyLLaVA family service, AMD/ROCm, Ascend/CANN, Ollama, llama.cpp, generic OpenAI, and other built-ins |
+| Contract-tested | Transformers, TinyLLaVA family service, AMD/ROCm, Ollama, llama.cpp, generic OpenAI, and other built-ins |
 
 Full environment records and commands are available for
 [NVIDIA A100](docs/validation/nvidia-a100.md),
-[Cambricon MLU](docs/validation/cambricon-mlu.md), and
-[MetaX C500](docs/validation/metax-c500.md).
+[Cambricon MLU](docs/validation/cambricon-mlu.md),
+[MetaX C500](docs/validation/metax-c500.md),
+[Moore Threads S5000](docs/validation/s5000.md), and
+[Ascend 910B](docs/validation/ascend-910b.md).
+These records describe validated text BBH integration paths, their software
+environments, and model-format limitations.
+[Portable S5000/910B examples](examples/hardware/README.md) reuse one Model/Evaluation
+across two System configurations.
 
 ## Beginner path: one managed evaluation
 

@@ -7,10 +7,11 @@ with a production-validated stack.
 |---|---|---|---|---|
 | NVIDIA A100 | CUDA | vLLM | lm-evaluation-harness | Real full BBH E2E |
 | Cambricon MLU | Neuware | vLLM-MLU | lm-evaluation-harness | Real full BBH E2E |
-| MetaX C500 | MACA | vLLM-MetaX | lm-evaluation-harness | Real single-device BBH smoke E2E |
+| MetaX C500 | MACA | vLLM-MetaX | lm-evaluation-harness | Real full BBH E2E on the version-qualified stack below |
+| Moore Threads S5000 | MUSA 5.2.0 | vLLM-MUSA 0.28.0 | lm-evaluation-harness | [Real full BBH E2E](validation/s5000.md) |
 | CPU | CPU | reference backend | reference evaluator | Hardware-free Mock E2E + integration tests |
 | AMD GPU | ROCm | Adapter contract only | — | Contract-tested |
-| Ascend NPU | CANN | Adapter contract only | — | Contract-tested |
+| Ascend 910B | CANN 9.1.0 installation; historical probe `unknown` | vLLM-Ascend 0.23.0 / vLLM 0.23.0+empty | lm-evaluation-harness | [Real full BBH E2E](validation/ascend-910b.md), single-NPU and TP2 |
 | OpenAI-compatible service | — | generic OpenAI Adapter | configured evaluator | Contract-tested |
 | Standard CausalLM | selected Runtime | Transformers native service | configured chat/completions evaluator | Contract + loopback protocol smoke |
 | TinyLLaVA Factory checkpoint | selected Runtime | TinyLLaVA family native service | configured chat evaluator | Contract + loopback protocol smoke |
@@ -21,6 +22,14 @@ with a production-validated stack.
 examples, final result publication and owned-process cleanup completed on a real
 machine. It is not a promise that every model supported by the underlying engine
 works.
+
+The S5000 and Ascend 910B integrations exercise text BBH, including the
+language path of VL checkpoints. This does not establish visual/audio
+evaluation or native AWQ/NVFP4 kernel support for models evaluated through
+BF16 derivatives. See the [S5000](validation/s5000.md) and
+[910B](validation/ascend-910b.md) records for environment details and
+configuration guidance. The 910B CANN installation metadata reports 9.1.0;
+saved runtime probes remain `unknown` and are not retroactively rewritten.
 
 For the validated MetaX stack (C500, MACA Runtime 3.8.0.23, vLLM 0.23.0,
 and the recorded vLLM-MetaX 0.23.0 plugin build), the compressed-tensors weight

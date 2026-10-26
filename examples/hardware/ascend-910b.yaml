@@ -1,0 +1,54 @@
+schema_version: "1.3"
+system:
+  name: example-ascend-910b
+metadata:
+  result_platform: ascend-910b
+profiles:
+  defaults:
+    hardware: ascend
+  environment:
+    inference:
+      type: current
+    lm-eval:
+      type: conda
+      profile: /REPLACE_WITH_LM_EVAL_CONDA_ENV
+      executable: /REPLACE_WITH_CONDA/bin/conda
+  hardware:
+    ascend:
+      type: ascend
+      devices: [0]
+      runtime:
+        type: cann
+        root: /REPLACE_WITH_CANN_ROOT
+  backend:
+    vllm:
+      type: vllm
+      executable: vllm
+      environment: inference
+      compatibility:
+        runtime_families: [cann]
+      parameters:
+        port: 8091
+        dtype: bfloat16
+        tensor_parallel_size: 1
+        gpu_memory_utilization: 0.50
+        max_num_seqs: 8
+        num_concurrent: 8
+        language_model_only: true
+        ready_timeout_seconds: 1200
+        dependency_probe_timeout_seconds: 300
+        model_probe_timeout_seconds: 300
+        extra_args: ["--enforce-eager", "--cpu-offload-gb", "0"]
+  evaluator:
+    lm_eval:
+      type: lm_eval
+      root: /REPLACE_WITH_LM_EVALUATION_HARNESS
+      environment: lm-eval
+      parameters:
+        provenance_policy: metadata-only
+        require_clean_framework: false
+models:
+  root: /REPLACE_WITH_MODEL_ROOT
+paths:
+  cache: cache
+  results: results

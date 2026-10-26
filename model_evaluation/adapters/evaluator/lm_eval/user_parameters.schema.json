@@ -103,7 +103,8 @@
     "provenance_policy": {
       "enum": [
         "migration",
-        "strict"
+        "strict",
+        "metadata-only"
       ]
     },
     "framework_revision": {

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Added Moore Threads S5000 Device and MUSA Runtime adapters, reusing the vLLM
+  Backend and existing evaluator contracts.
+- Reconstructed CANN library, Python, OPP/tiling, and tool paths for managed
+  Backend processes from the selected runtime installation.
+- Added sanitized S5000 and Ascend 910B full text BBH validation records,
+  portable System/Evaluation examples, and updated bilingual support tables.
+- Added explicit `metadata-only` lm-eval BBH recording: retains framework
+  revision, task lists and paths without computing file or protocol digests.
+  Incompatible content-verification policies fail before Dataset resolution.
+
 ## 4.1.0-rc4
 
 - Added managed `transformers` and TinyLLaVA model-family Backend Adapters for

@@ -11,7 +11,15 @@ def _framework_source(params):
     root_value=params.get('tool_root') or params.get('framework_root')
     if not root_value: raise AdapterError('CONFIG_INVALID','lm_eval evaluation profile requires resolved parameters.tool_root')
     policy=str(params.get('provenance_policy') or 'migration').lower()
-    if policy not in {'migration','strict'}: raise AdapterError('CONFIG_INVALID',f'unsupported provenance_policy: {policy}')
+    if policy not in {'migration','strict','metadata-only'}: raise AdapterError('CONFIG_INVALID',f'unsupported provenance_policy: {policy}')
+    metadata_only = policy == "metadata-only"
+    require_clean = bool(params.get("require_clean_framework", not metadata_only))
+    if metadata_only and require_clean:
+        raise AdapterError(
+            "CONFIG_CONFLICT",
+            "metadata-only does not inspect source-file content; "
+            "require_clean_framework=true conflicts with this mode",
+        )
     declared_raw=params.get('framework_revision')
     if policy=='strict' and not declared_raw:
         raise AdapterError('CONFIG_INVALID','strict lm-eval provenance requires parameters.framework_revision so the framework identity is frozen in the ExecutionPlan')
@@ -26,14 +34,15 @@ def _framework_source(params):
         candidate=normalize_object_id(p.stdout) if p.returncode==0 else None
         if candidate:
             revision=candidate
-            q=subprocess.run(['git','-C',str(root),'-c','core.fileMode=false','status','--porcelain','--untracked-files=all'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=10,check=False)
-            dirty=bool(q.stdout.strip()) if q.returncode==0 else None
+            if not metadata_only:
+                q=subprocess.run(['git','-C',str(root),'-c','core.fileMode=false','status','--porcelain','--untracked-files=all'],text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=10,check=False)
+                dirty=bool(q.stdout.strip()) if q.returncode==0 else None
     except Exception: pass
     if revision is None:
         revision = read_git_head(root)
     displayed_revision=revision or 'unversioned-source'
     if declared and revision != declared: raise AdapterError('COMPATIBILITY_ERROR',f'lm-eval framework revision mismatch: expected {declared}, got {displayed_revision}')
-    if params.get('require_clean_framework',True) and dirty is not False:
+    if require_clean and dirty is not False:
         detail='dirty' if dirty is True else 'cleanliness could not be established'
         raise AdapterError('COMPATIBILITY_ERROR',f'lm-eval framework tree {detail}: {root}')
     return root,displayed_revision,dirty
@@ -377,6 +386,8 @@ def normalize(i,c):
     else:
         raise AdapterError('RESULT_INVALID',f'unsupported metric namespace: {namespace}')
     result={"schema_version":"1.0","run_id":run['run_id'],"model":run['model'],"benchmark":run['benchmark'],"framework":"lm_eval","metrics":metrics,"raw_result":{"path":str(p),"media_type":"application/json"},"breakdowns":_result_breakdowns(obj,task['task_id'],source,metrics,native_metrics,namespace,metric_map),"metadata":{"task_id":task['task_id'],"result_scope":source,"protocol_fingerprint":task['protocol_fingerprint'],"metric_namespace":namespace}}
+    if (task.get("provenance") or {}).get("policy") == "metadata-only":
+        result["metadata"]["protocol_recording_mode"] = "metadata-only"
     sample_artifacts=_sample_artifacts(i['raw_result_root'])
     if sample_artifacts: result['sample_artifacts']=sample_artifacts
     token_usage=_token_usage(i['raw_result_root'])

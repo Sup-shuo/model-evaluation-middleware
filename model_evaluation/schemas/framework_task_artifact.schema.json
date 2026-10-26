@@ -34,8 +34,15 @@
       }
     },
     "protocol_fingerprint": {
-      "type": "string",
-      "pattern": "^[a-f0-9]{64}$"
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "metadata": {
       "type": "object",
@@ -107,5 +114,63 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "provenance"
+        ],
+        "properties": {
+          "provenance": {
+            "required": [
+              "policy"
+            ],
+            "properties": {
+              "policy": {
+                "const": "metadata-only"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "protocol_fingerprint": {
+            "type": "null"
+          },
+          "provenance": {
+            "required": [
+              "policy",
+              "strict",
+              "source_fingerprinted"
+            ],
+            "properties": {
+              "strict": {
+                "const": false
+              },
+              "source_fingerprinted": {
+                "const": false
+              }
+            }
+          },
+          "task_root": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "task_root"
+        ]
+      },
+      "else": {
+        "properties": {
+          "protocol_fingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    }
+  ]
 }

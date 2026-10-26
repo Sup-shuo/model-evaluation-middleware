@@ -57,10 +57,30 @@ def _rewrite_task(text,official,data_path):
     kwargs='dataset_name: null\ndataset_kwargs:\n  data_files:\n    test: '+json.dumps(str(data_path),ensure_ascii=False)+'\n  field: examples\n'
     return '# Generated from frozen lm-eval task; only local dataset redirection/task name changed.\n'+kwargs+text
 
+def _metadata_only(i: dict) -> bool:
+    parameters = (i.get("evaluation") or {}).get("parameters") or {}
+    return parameters.get("provenance_policy") == "metadata-only"
+
+
+def _validate_recording_policy(i: dict) -> None:
+    if not _metadata_only(i):
+        return
+    dataset = (i.get("benchmark") or {}).get("dataset") or {}
+    parameters = dataset.get("parameters") or {}
+    artifact_metadata = (i.get("dataset_artifact") or {}).get("metadata") or {}
+    policies = (parameters.get("integrity_policy", "basic"), artifact_metadata.get("integrity_policy", "basic"))
+    if any(policy != "basic" for policy in policies):
+        raise AdapterError(
+            "CONFIG_CONFLICT",
+            "metadata-only requires dataset.integrity_policy=basic; "
+            "strict dataset verification computes content hashes",
+        )
+
+
 def _revision(root: Path, evaluation: dict):
     params=(evaluation.get('parameters') or {})
     policy=str(params.get('provenance_policy') or 'migration').lower()
-    if policy not in {'migration','strict'}: raise AdapterError('CONFIG_INVALID',f'unsupported provenance_policy: {policy}')
+    if policy not in {'migration','strict','metadata-only'}: raise AdapterError('CONFIG_INVALID',f'unsupported provenance_policy: {policy}')
     declared_raw=params.get('framework_revision')
     if policy=='strict' and not declared_raw:
         raise AdapterError('CONFIG_INVALID','strict lm-eval provenance requires parameters.framework_revision so the framework identity is frozen in the ExecutionPlan')
@@ -90,7 +110,8 @@ def _protocol_basis(i):
     for task in tasks:
         if task not in mapping: raise AdapterError('RESULT_INVALID',f'missing official BBH task config: {task}')
         files.append(mapping[task])
-    return source,tasks,mapping,{p.name:_sha(p) for p in files}
+    source_hashes = {} if _metadata_only(i) else {p.name: _sha(p) for p in files}
+    return source, tasks, mapping, source_hashes
 
 def _dataset_integrity(d):
     metadata=d.get('metadata') or {}; policy=metadata.get('integrity_policy','basic')
@@ -100,18 +121,30 @@ def _dataset_integrity(d):
     return policy,metadata
 
 def _fingerprint(i):
+    _validate_recording_policy(i)
     root,_,_,_=_source(i); _,tasks,_,source_hashes=_protocol_basis(i); d=i['dataset_artifact']; rev=_revision(root,i.get('evaluation') or {})
     policy,_=_dataset_integrity(d); dataset_basis={"dataset_id":d.get('dataset_id'),"revision":d.get('revision'),"integrity_policy":policy}
     if policy=='strict': dataset_basis['fingerprint']=d['fingerprint']
-    basis={"binding":"lm_eval.bbh/v2","benchmark":i['benchmark'],"dataset":dataset_basis,"framework_revision":rev,"source_protocol_sha256":source_hashes,"official_tasks":tasks}
+    basis={"binding":"lm_eval.bbh/v2","benchmark":i['benchmark'],"dataset":dataset_basis,"framework_revision":rev,"official_tasks":tasks}
+    if _metadata_only(i):
+        return None, basis
+    basis["source_protocol_sha256"] = source_hashes
     return hashlib.sha256(json.dumps(basis,sort_keys=True,separators=(',',':')).encode()).hexdigest(),basis
 
-def requirements(i,c): return {"schema_version":"1.0","requirements":[]}
+def requirements(i,c):
+    _validate_recording_policy(i)
+    return {"schema_version":"1.0","requirements":[]}
 def protocol_fingerprint(i,c):
-    fp,_=_fingerprint(i); return {"protocol_fingerprint":fp}
+    fp, _ = _fingerprint(i)
+    result = {"protocol_fingerprint": fp}
+    if _metadata_only(i):
+        result["recording_mode"] = "metadata-only"
+    return result
 
 def build_task(i,c):
+    _validate_recording_policy(i)
     b=i['benchmark']; d=i['dataset_artifact']; root,source,group,template=_source(i); tasks,mapping=None,None
+    metadata_only = _metadata_only(i)
     if list(b.get('metrics') or []) != ['accuracy']:
         raise AdapterError('CONFIG_INVALID','lm_eval.bbh currently exposes the canonical accuracy metric')
     source,tasks,mapping,source_hashes=_protocol_basis(i)
@@ -130,7 +163,9 @@ def build_task(i,c):
             suffix=official.removeprefix(OFFICIAL_PREFIX); data=data_root/f'{suffix}.json'
             if not data.is_file(): raise AdapterError('DATASET_INVALID',f'BBH DatasetArtifact missing {data}')
             src=mapping[official]; out=temp/src.name; out.write_text(_rewrite_task(src.read_text(encoding='utf-8'),official,data),encoding='utf-8')
-            row={"official_task":official,"local_task":LOCAL_PREFIX+suffix,"data_file":str(data),"source_yaml_sha256":_sha(src)}
+            row={"official_task":official,"local_task":LOCAL_PREFIX+suffix,"data_file":str(data)}
+            if not metadata_only:
+                row["source_yaml_sha256"] = _sha(src)
             # External Dataset integrity is owned by the selected DatasetAdapter
             # policy.  Do not silently upgrade basic mode into byte hashing here.
             data_ref=next((x for x in (d.get('files') or []) if Path(x.get('path','')).resolve()==data.resolve()),None)
@@ -139,7 +174,12 @@ def build_task(i,c):
                     raise AdapterError('COMPATIBILITY_ERROR',f'strict BBH DatasetArtifact lacks file SHA256: {data}')
                 row['data_sha256']=data_ref['sha256']
             rows.append(row)
-        fp,basis=_fingerprint(i); manifest={"framework_revision":_revision(root,i.get('evaluation') or {}),"protocol_fingerprint":fp,"source_protocol_sha256":source_hashes,"dataset_revision":d.get('revision'),"dataset_integrity_policy":dataset_policy,"content_fingerprinted":dataset_policy=='strict',"content_verified":bool(dataset_metadata.get('content_verified',False)),"revision_provenance":dataset_metadata.get('revision_provenance','unspecified'),"rows":rows}
+        fp,basis=_fingerprint(i); manifest={"framework_revision":basis["framework_revision"],"protocol_fingerprint":fp,"dataset_revision":d.get('revision'),"dataset_integrity_policy":dataset_policy,"content_fingerprinted":dataset_policy=='strict',"content_verified":bool(dataset_metadata.get('content_verified',False)),"revision_provenance":dataset_metadata.get('revision_provenance','unspecified'),"rows":rows}
+        if metadata_only:
+            manifest["recording_mode"] = "metadata-only"
+            manifest["source_task_files"] = [group.name, template.name, *[mapping[task].name for task in tasks]]
+        else:
+            manifest["source_protocol_sha256"] = source_hashes
         if dataset_policy=='strict': manifest['dataset_fingerprint']=d['fingerprint']
         (temp/'PROTOCOL_MANIFEST.json').write_text(json.dumps(manifest,ensure_ascii=False,sort_keys=True,indent=2)+'\n',encoding='utf-8')
         if staging.exists(): shutil.rmtree(staging)
@@ -147,9 +187,13 @@ def build_task(i,c):
     finally:
         if temp is not None and temp.exists(): shutil.rmtree(temp,ignore_errors=True)
     artifacts=[]
-    for p in sorted(x for x in staging.rglob('*') if x.is_file()): artifacts.append({"path":str(p),"sha256":_sha(p)})
+    for path in sorted(x for x in staging.rglob('*') if x.is_file()):
+        artifact = {"path": str(path)}
+        if not metadata_only:
+            artifact["sha256"] = _sha(path)
+        artifacts.append(artifact)
     metadata={"dataset_integrity_policy":dataset_policy,"content_fingerprinted":manifest['content_fingerprinted'],"content_verified":manifest['content_verified'],"revision_provenance":manifest['revision_provenance'],"dataset_revision":d.get('revision'),"source_task_count":len(tasks)}
     if dataset_policy=='strict': metadata['dataset_fingerprint']=d['fingerprint']
     fewshot=(b.get('protocol') or {}).get('fewshot',3)
-    return {"schema_version":"1.0","framework":"lm_eval","benchmark_id":b['id'],"task_id":LOCAL_GROUP,"task_root":str(staging),"artifacts":artifacts,"protocol_fingerprint":fp,"execution":{"inference":["multiple_choice"],"num_fewshot":fewshot},"metrics":{"namespace":"canonical","required":["accuracy"],"mapping":{"acc_norm,none":"accuracy"}},"provenance":{"strict":True,"framework_revision":manifest['framework_revision'],"source_fingerprinted":True,"policy":"strict"},"metadata":metadata}
+    return {"schema_version":"1.0","framework":"lm_eval","benchmark_id":b['id'],"task_id":LOCAL_GROUP,"task_root":str(staging),"artifacts":artifacts,"protocol_fingerprint":fp,"execution":{"inference":["multiple_choice"],"num_fewshot":fewshot},"metrics":{"namespace":"canonical","required":["accuracy"],"mapping":{"acc_norm,none":"accuracy"}},"provenance":{"strict":not metadata_only,"framework_revision":manifest['framework_revision'],"source_fingerprinted":not metadata_only,"policy":"metadata-only" if metadata_only else "strict"},"metadata":metadata}
 OPERATIONS={"requirements":requirements,"build_task":build_task,"protocol_fingerprint":protocol_fingerprint}

@@ -7,7 +7,7 @@ change model algorithms.
 
 | Backend | Upstream | Default mode | Repository validation |
 |---|---|---|---|
-| vLLM | [vllm-project/vllm](https://github.com/vllm-project/vllm) | Managed | Real E2E on NVIDIA, MLU, and MetaX stacks listed in the compatibility matrix |
+| vLLM | [vllm-project/vllm](https://github.com/vllm-project/vllm) | Managed | Real E2E on NVIDIA, MLU, MetaX, Moore Threads S5000, and Ascend 910B stacks listed in the compatibility matrix |
 | Transformers | [huggingface/transformers](https://github.com/huggingface/transformers) | Managed | Contract + loopback protocol smoke |
 | TinyLLaVA family | Checkpoint-embedded official `model.chat` code | Managed | Contract + loopback protocol smoke |
 | Generic OpenAI-compatible service | External service | External | Contract-tested |
@@ -17,8 +17,12 @@ change model algorithms.
 | … | External Adapter | Managed/attached/external | Deployment-specific |
 
 Vendor vLLM implementations follow the same Backend contract. Relevant
-upstreams include [Cambricon vllm-mlu](https://github.com/Cambricon/vllm-mlu)
-and [MetaX vLLM](https://github.com/MetaX-MACA/vLLM-metax).
+upstreams include [Cambricon vllm-mlu](https://github.com/Cambricon/vllm-mlu),
+[MetaX vLLM](https://github.com/MetaX-MACA/vLLM-metax),
+[Moore Threads vLLM-MUSA](https://github.com/MooreThreads/vllm-musa), and
+[vLLM-Ascend](https://github.com/vllm-project/vllm-ascend).
+Choose the platform-compatible engine/environment in System; all use the
+existing `vllm` Backend Adapter. See the [S5000/910B configuration examples](../../examples/hardware/README.md).
 
 ## Management modes
 

@@ -248,6 +248,12 @@ def _validate_binding(schemas, operation, output, input_obj, label) -> None:
         schemas.validate("framework_task_artifact", output)
         benchmark = input_obj.get("benchmark") or {}
         evaluation = input_obj.get("evaluation") or {}
+        requested_metadata = (evaluation.get("parameters") or {}).get("provenance_policy") == "metadata-only"
+        recorded_metadata = (output.get("provenance") or {}).get("policy") == "metadata-only"
+        if requested_metadata != recorded_metadata:
+            raise AdapterProtocolError(
+                f"{label} metadata-only recording mode disagrees with requested policy"
+            )
         expected_benchmark = benchmark.get("id")
         expected_framework = (evaluation.get("framework") or {}).get("adapter")
         if expected_benchmark and output.get("benchmark_id") != expected_benchmark:
@@ -260,6 +266,19 @@ def _validate_binding(schemas, operation, output, input_obj, label) -> None:
             )
     elif operation == "protocol_fingerprint":
         value = _require(output, "protocol_fingerprint", label)
+        evaluation = input_obj.get("evaluation") or {}
+        metadata_only = (evaluation.get("parameters") or {}).get("provenance_policy") == "metadata-only"
+        if metadata_only:
+            if value is not None or output.get("recording_mode") != "metadata-only":
+                raise AdapterProtocolError(
+                    f"{label} metadata-only requires a null protocol_fingerprint "
+                    "and explicit recording_mode"
+                )
+            return
+        if output.get("recording_mode") == "metadata-only":
+            raise AdapterProtocolError(
+                f"{label} metadata-only output requires an explicit metadata-only input policy"
+            )
         if not isinstance(value, str) or not _HEX64.fullmatch(value):
             raise AdapterProtocolError(
                 f"{label}.protocol_fingerprint must be sha256 hex"

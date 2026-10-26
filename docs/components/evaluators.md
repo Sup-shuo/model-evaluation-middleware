@@ -7,7 +7,7 @@ Binding.
 
 | Evaluator | Upstream | Built-in integration | Repository validation |
 |---|---|---|---|
-| lm-evaluation-harness | [EleutherAI/lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness) | Evaluator + generic and BBH Bindings | Full BBH E2E on NVIDIA and MLU; C500 smoke E2E |
+| lm-evaluation-harness | [EleutherAI/lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness) | Evaluator + generic and BBH Bindings | Full text BBH E2E on A100, MLU, C500, S5000, and Ascend 910B; see the recorded stacks in the [compatibility matrix](../compatibility.md) |
 | EvalScope | [modelscope/evalscope](https://github.com/modelscope/evalscope) | Evaluator + Binding | Existing-service GSM8K smoke E2E on NVIDIA A100 |
 | Reference Evaluator | Included mock implementation | Evaluator + Binding | CPU Mock E2E |
 | … | External Adapter | Evaluator and, when needed, Binding | Deployment-specific |
@@ -51,6 +51,26 @@ evaluator:
 
 Unused environments are not activated. A separate environment is recommended
 when evaluator dependency ranges conflict, but compatible roles may share one.
+
+## BBH metadata-only recording
+
+The S5000/910B examples select the `lm_eval.bbh` Binding and set these System
+Evaluator parameters:
+
+```yaml
+parameters:
+  provenance_policy: metadata-only
+  require_clean_framework: false
+```
+
+This records the observed framework revision, task list, configuration, and
+artifact paths without computing source-file or protocol digests. The saved
+protocol fingerprint is `null` with an explicit `metadata-only` marker; normal
+path, missing-file, and symlink checks remain active. The Dataset must use
+`integrity_policy: basic` (the BBH default). Strict Dataset verification and
+`require_clean_framework: true` conflict with this mode. Other lm-eval Bindings
+reject the mode rather than silently falling back. Existing `migration` and
+`strict` recording policies remain supported.
 
 ## Adding another evaluation framework
 

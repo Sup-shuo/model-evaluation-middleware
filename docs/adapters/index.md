@@ -8,8 +8,8 @@ adding vendor- or framework-name branches to orchestration code.
 
 | Kind | Responsibility | Built-in examples |
 |---|---|---|
-| Device | Discover devices and establish visibility | `cpu`, `nvidia`, `mlu`, `metax`, `amd`, `ascend` |
-| Runtime | Resolve SDK/runtime environment facts | `cpu`, `cuda`, `neuware`, `maca`, `rocm`, `cann` |
+| Device | Discover devices and establish visibility | `cpu`, `nvidia`, `mlu`, `metax`, `mthreads`, `amd`, `ascend` |
+| Runtime | Resolve SDK/runtime environment facts | `cpu`, `cuda`, `neuware`, `maca`, `musa`, `rocm`, `cann` |
 | Environment | Resolve interpreter and wrap processes | `current`, `conda`, `venv` |
 | Backend | Preflight, start/attach, probe service, snapshot | `vllm`, `transformers`, `tinyllava`, `generic_openai`, `ollama`, `llama_cpp`, `reference` |
 | Dataset | Resolve, prepare, verify, snapshot data | `bbh_local`, `local_files`, `virtual` |

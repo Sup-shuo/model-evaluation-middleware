@@ -43,6 +43,9 @@ component pages describe integrations, and Adapter pages define extension work.
 - [NVIDIA A100](validation/nvidia-a100.md)
 - [Cambricon MLU](validation/cambricon-mlu.md)
 - [MetaX C500](validation/metax-c500.md)
+- [Moore Threads S5000](validation/s5000.md)
+- [Ascend 910B](validation/ascend-910b.md)
+- [Portable S5000/910B configuration examples](../examples/hardware/README.md)
 
 These records show exercised stacks. They do not expand the validation status
 of other built-in Adapters or every model accepted by an upstream engine.

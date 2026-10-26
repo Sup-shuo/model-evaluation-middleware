@@ -32,11 +32,12 @@ HARDWARE_TEMPLATES = {
         "maca",
         "/opt/maca",
         (("driver_root", "/opt/mxdriver"), ("driver_tool", "/usr/bin/mx-smi")),
-        validation_status="Real smoke E2E: MetaX C500/MACA",
+        validation_status="Real full E2E: MetaX C500/MACA on the recorded vLLM-MetaX stack",
     ),
     "amd": HardwareTemplate("amd", "rocm", "rocm", "/opt/rocm"),
     "ascend": HardwareTemplate(
-        "ascend", "cann", "cann", "/usr/local/Ascend/ascend-toolkit/latest"
+        "ascend", "cann", "cann", "/usr/local/Ascend/ascend-toolkit/latest",
+        validation_status="Real full text BBH E2E: Ascend 910B/CANN on the recorded vLLM-Ascend stack",
     ),
     "cpu": HardwareTemplate(
         "cpu", "cpu", "cpu", None,

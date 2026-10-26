@@ -149,13 +149,15 @@ class Planner:
         facts=merge_fact_sets(facts,facts_from_environment(evaluation_env,'evaluation_environment'))
         report=evaluate(backend_reqs,facts)
         reasons.extend(report.reasons); optional.extend(report.optional_misses); diagnostics.extend(report.diagnostics)
-        resolved['dataset_resolution']=invoke_cached(clients['dataset'],'resolve',{'benchmark':benchmark},context=ctx,timeout=3)
-        dataset_lock_id='dataset:'+benchmark['dataset']['provider']+':'+stable_id(resolved['dataset_resolution'],length=24)
-        resources.append({'kind':'cache_lock','id':dataset_lock_id,'exclusive':True,'metadata':{'provider':benchmark['dataset']['provider'],'dataset_id':resolved['dataset_resolution'].get('dataset_id'),'revision':resolved['dataset_resolution'].get('revision')}})
-        bind_req=invoke_cached(clients['binding'],'requirements',{'benchmark':benchmark},context=ctx,timeout=3)
+        # Let the Binding reject incompatible policies before Dataset resolution
+        # can inspect data content. Core does not interpret framework policies.
+        bind_req=invoke_cached(clients['binding'],'requirements',{'benchmark':benchmark,'evaluation':evaluation},context=ctx,timeout=3)
         resolved['binding_requirements']=bind_req
         bind_report=evaluate(bind_req,facts)
         reasons.extend(bind_report.reasons); optional.extend(bind_report.optional_misses); diagnostics.extend(bind_report.diagnostics)
+        resolved['dataset_resolution']=invoke_cached(clients['dataset'],'resolve',{'benchmark':benchmark},context=ctx,timeout=3)
+        dataset_lock_id='dataset:'+benchmark['dataset']['provider']+':'+stable_id(resolved['dataset_resolution'],length=24)
+        resources.append({'kind':'cache_lock','id':dataset_lock_id,'exclusive':True,'metadata':{'provider':benchmark['dataset']['provider'],'dataset_id':resolved['dataset_resolution'].get('dataset_id'),'revision':resolved['dataset_resolution'].get('revision')}})
         unique={}
         for client in clients.values():
             ident=client.identity; unique[(ident.kind,ident.name)]={'kind':ident.kind,'name':ident.name,'version':ident.version}

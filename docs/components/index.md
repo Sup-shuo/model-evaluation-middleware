@@ -7,7 +7,7 @@ of validation status.
 
 | Component | Built-in surface | Configuration guide |
 |---|---|---|
-| Hardware and Runtime | CPU/CPU, NVIDIA/CUDA, Cambricon MLU/Neuware, MetaX/MACA, AMD/ROCm, Ascend/CANN, … | [Hardware and Runtimes](hardware.md) |
+| Hardware and Runtime | CPU/CPU, NVIDIA/CUDA, Cambricon MLU/Neuware, MetaX/MACA, Moore Threads/MUSA, AMD/ROCm, Ascend/CANN, … | [Hardware and Runtimes](hardware.md) |
 | Inference Backend | vLLM, generic OpenAI-compatible service, Ollama, llama.cpp, Reference Backend, … | [Inference Backends](inference-backends.md) |
 | Evaluation framework | lm-evaluation-harness, EvalScope, Reference Evaluator, … | [Evaluation frameworks](evaluators.md) |
 | Dataset and Binding | BBH local, local files, virtual, lm-eval bindings, EvalScope binding, … | [Datasets and Bindings](datasets.md) |

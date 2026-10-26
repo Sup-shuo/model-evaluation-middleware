@@ -30,3 +30,19 @@ sufficient.
 
 Keep code readable: one responsibility per helper, no compressed multi-statement
 control flow, bounded subprocess/network operations, and explicit cleanup.
+
+## Public documentation and examples
+
+Describe integration capabilities, validation levels, environment requirements,
+and reproducible configuration examples. Keep internal evaluation campaign
+details private: completed or successful run/model totals, per-platform counts,
+conversion totals, pending or failed model lists, download inventories,
+operational timelines, and unpublished scores. Redact these details from prose,
+tables, screenshots, SVGs, attachments, and release descriptions before upload.
+
+Software versions, device requirements, benchmark protocol parameters, and
+synthetic examples may remain when needed to explain usage. A real result
+example requires explicit approval for publication and a review of its metadata;
+approval for an example does not authorize publishing campaign-wide statistics.
+Review the content itself before publishing; a path/secret scan alone cannot
+identify sensitive operational information.

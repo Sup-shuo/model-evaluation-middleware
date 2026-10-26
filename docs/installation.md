@@ -92,8 +92,11 @@ cd my-evaluation
 The prompt displays that template's current validation level and asks for
 comma-separated device IDs on accelerator platforms. The generated template is
 explicitly vLLM + lm-evaluation-harness and uses the Controller's current Python
-environment for both Backend and Evaluator. AMD and Ascend templates are marked
-contract-tested rather than real-machine validated. If the real deployment
+environment for both Backend and Evaluator. AMD remains contract-tested;
+Ascend has full text BBH validation on the recorded 910B stack. S5000 is
+configured through the [portable hardware examples](../examples/hardware/README.md),
+not an `init --hardware` choice in this version. Those examples explicitly separate
+the inference environment from the evaluator environment. If the real deployment
 isolates environments, edit the named profiles in System as described in
 [Environment isolation](configuration/environments.md). Placeholder values are
 not accepted by the guided path.
@@ -101,15 +104,15 @@ not accepted by the guided path.
 For scripts or CI, supply the same values without prompts:
 
 ```bash
-eval-manager init my-evaluation \\
-  --hardware mlu \\
-  --devices 0 \\
-  --model-id qwen35-08b-base \\
-  --models-root /data \\
-  --model-ref Qwen/Qwen3.5-0.8B-Base \\
-  --lm-eval-root /opt/lm-evaluation-harness \\
-  --cache-root /data/lm-eval-cache \\
-  --benchmark bbh \\
+eval-manager init my-evaluation \
+  --hardware mlu \
+  --devices 0 \
+  --model-id qwen35-08b-base \
+  --models-root /data \
+  --model-ref Qwen/Qwen3.5-0.8B-Base \
+  --lm-eval-root /opt/lm-evaluation-harness \
+  --cache-root /data/lm-eval-cache \
+  --benchmark bbh \
   --backend-executable vllm
 ```
 

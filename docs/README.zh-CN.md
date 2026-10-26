@@ -42,8 +42,8 @@ eval-manager demo --render-summary
 
 | 层级 | 当前内置适配 |
 |---|---|
-| Hardware | CPU · NVIDIA GPU · Cambricon MLU · MetaX GPU · AMD GPU · Ascend NPU · … |
-| Runtime | CPU · CUDA · Neuware · MACA · ROCm · CANN · … |
+| Hardware | CPU · NVIDIA GPU · Cambricon MLU · MetaX GPU · Moore Threads S5000 · AMD GPU · Ascend NPU · … |
+| Runtime | CPU · CUDA · Neuware · MACA · MUSA · ROCm · CANN · … |
 | 推理 Backend | vLLM · Transformers · 模型家族 Native Service · OpenAI-compatible service · Ollama · llama.cpp · Reference Backend · … |
 | Evaluator | lm-evaluation-harness · EvalScope · Reference Evaluator · … |
 | Dataset / Binding | BBH local · local files · virtual dataset · lm-eval bindings · EvalScope binding · … |
@@ -70,14 +70,17 @@ eval-manager demo --render-summary
 
 | 级别 | 已实际覆盖路径 |
 |---|---|
-| 完整实机 E2E | NVIDIA A100/CUDA、Cambricon MLU/Neuware；vLLM + lm-eval + 完整 BBH |
-| 实机 smoke E2E | NVIDIA A100/CUDA；已有 vLLM OpenAI-compatible 服务 + EvalScope + GSM8K；MetaX C500/MACA；vLLM-MetaX + lm-eval + BBH |
+| 完整实机 E2E | NVIDIA A100/CUDA、Cambricon MLU/Neuware、MetaX C500/MACA、Moore Threads S5000/MUSA、Ascend 910B/CANN；各自记录的 vLLM 平台栈 + lm-eval + 完整 BBH |
+| 实机 smoke E2E | NVIDIA A100/CUDA；已有 vLLM OpenAI-compatible 服务 + EvalScope + GSM8K |
 | Mock E2E | CPU + Reference Backend/Evaluator + virtual Dataset |
-| Contract-tested | Transformers、TinyLLaVA 家族服务、AMD/ROCm、Ascend/CANN、Ollama、llama.cpp、generic OpenAI 等 |
+| Contract-tested | Transformers、TinyLLaVA 家族服务、AMD/ROCm、Ollama、llama.cpp、generic OpenAI 等 |
 
 详细环境与命令见 [NVIDIA A100](validation/nvidia-a100.md)、
-[Cambricon MLU](validation/cambricon-mlu.md) 和
-[MetaX C500](validation/metax-c500.md) 的脱敏记录。
+[Cambricon MLU](validation/cambricon-mlu.md)、
+[MetaX C500](validation/metax-c500.md)、[Moore Threads S5000](validation/s5000.md)
+和 [Ascend 910B](validation/ascend-910b.md)。这些记录说明已验证的文本 BBH
+集成路径、软件环境和模型格式限制。
+[两平台可移植示例](../examples/hardware/README.md)展示同一 Model/Evaluation 如何复用两个 System。
 
 ## 小白入口：一条命令完成托管评测
 

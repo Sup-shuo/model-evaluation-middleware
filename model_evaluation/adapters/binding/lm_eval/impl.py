@@ -3,7 +3,18 @@ import hashlib, json, subprocess
 from pathlib import Path
 from model_evaluation.sdk.runtime import AdapterError
 from model_evaluation.sdk.gitmeta import normalize_object_id, read_git_head
-def requirements(i,c): return {"schema_version":"1.0","requirements":[]}
+def _recording_policy(i):
+    parameters = (i.get("evaluation") or {}).get("parameters") or {}
+    if parameters.get("provenance_policy") == "metadata-only":
+        raise AdapterError(
+            "CONFIG_INVALID",
+            "metadata-only is currently supported by the lm_eval.bbh binding only",
+        )
+
+
+def requirements(i,c):
+    _recording_policy(i)
+    return {"schema_version":"1.0","requirements":[]}
 
 def _metric_contract(benchmark,evaluation):
     required=list(benchmark.get('metrics') or [])
@@ -57,8 +68,10 @@ def _basis(b,d,e):
     basis={"benchmark":b,"dataset_fingerprint":d.get('fingerprint'),"binding":"lm_eval/v1-native","framework_revision":revision,"framework_task_sources":sources}
     return task,root,files,revision,basis
 def _fingerprint(b,d,e):
+    _recording_policy({"evaluation": e})
     _,_,_,_,basis=_basis(b,d,e); return hashlib.sha256(json.dumps(basis,sort_keys=True,separators=(',',':')).encode()).hexdigest()
 def build_task(i,c):
+    _recording_policy(i)
     b=i['benchmark']; d=i['dataset_artifact']; e=i.get('evaluation') or {}
     if (d.get('materialization') or {}).get('kind') != 'virtual': raise AdapterError('COMPATIBILITY_ERROR',f"generic lm_eval binding does not consume concrete dataset provider output for {b['id']}; install specialized binding lm_eval.{b['id']}")
     protocol=b.get('protocol') or {}; task,root,files,revision,basis=_basis(b,d,e); inference=protocol.get('inference') or ['generation']

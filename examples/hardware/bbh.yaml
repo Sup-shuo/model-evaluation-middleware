@@ -1,0 +1,39 @@
+schema_version: "1.3"
+# Shared unchanged between both systems; no dependency on config/models.
+models:
+  - id: coder3101-qwen35-4b-heretic
+    label: coder3101 Qwen3.5 4B Heretic
+    source:
+      type: hf
+      ref: coder3101/Qwen3.5-4B-heretic
+    resources:
+      device_count: 1
+    backends:
+      vllm:
+        max_model_len: 4096
+    provenance:
+      policy: migration
+benchmarks: [bbh]
+backend:
+  profile: vllm
+  parameters:
+    seed: 1234
+    pythonhashseed: 1234
+evaluator:
+  profile: lm_eval
+  parameters:
+    batch_size: 1
+    num_concurrent: 8
+    log_samples: true
+    random_seed: 0
+    numpy_random_seed: 1234
+    torch_random_seed: 1234
+    fewshot_random_seed: 1234
+    request_seed: 1234
+    pythonhashseed: 1234
+    evaluation_timeout_seconds: 86400
+    preflight_timeout_seconds: 600
+offline: true
+execution:
+  mode: serial
+  continue_on_error: false
