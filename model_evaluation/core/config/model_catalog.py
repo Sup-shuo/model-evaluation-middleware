@@ -63,6 +63,47 @@ def _load_model_catalog(app, evaluation_path: Path, configured: object) -> tuple
     return catalog, root, True
 
 
+def _select_modality_artifact(app, catalog, row, evaluation, index):
+    """Explicit, one-hop catalog selection; never guess from model names."""
+    modalities = {
+        (app.specs.resolve("benchmark", str(benchmark)).get("metadata") or {}).get(
+            "input_modality", "text"
+        )
+        for benchmark in evaluation["benchmarks"]
+    }
+    if len(modalities) != 1:
+        raise ConfigError(
+            f"evaluation.models[{index}].select_artifact_by_modality requires "
+            "benchmarks with one input_modality; split mixed-modality evaluations"
+        )
+    modality = next(iter(modalities))
+    mapping = (row.get("metadata") or {}).get("artifacts_by_modality")
+    if not isinstance(mapping, dict) or not mapping:
+        raise ConfigError(
+            f"model {row.get('id')!r}: select_artifact_by_modality requires "
+            "metadata.artifacts_by_modality mapping"
+        )
+    for key, target in mapping.items():
+        if not isinstance(key, str) or not key.strip() or not isinstance(target, str) or not target.strip():
+            raise ConfigError("metadata.artifacts_by_modality must map non-empty modalities to catalog IDs")
+        if target not in catalog:
+            raise ConfigError(f"metadata.artifacts_by_modality[{key!r}] references unknown model {target!r}")
+        if target == row.get("id"):
+            raise ConfigError("metadata.artifacts_by_modality cannot reference the source model itself")
+    if modality not in mapping:
+        raise ConfigError(
+            f"model {row.get('id')!r}: no artifacts_by_modality mapping for {modality!r}; "
+            "select an explicit model or add a verified catalog mapping"
+        )
+    target = copy.deepcopy(catalog[mapping[modality]])
+    target.setdefault("metadata", {})["artifact_selection"] = {
+        "requested_model_id": row["id"],
+        "input_modality": modality,
+        "selected_model_id": target["id"],
+    }
+    return target
+
+
 def resolve_model_entries(app, evaluation: dict[str, Any], evaluation_path: Path) -> tuple[list[dict[str, Any]], Path, bool]:
     catalog, root, catalog_enabled = _load_model_catalog(
         app, evaluation_path, evaluation.get("model_catalog")
@@ -82,6 +123,7 @@ def resolve_model_entries(app, evaluation: dict[str, Any], evaluation_path: Path
         else:
             raw = copy.deepcopy(item)
             run_resources = raw.pop("resources", None)
+            select_artifact = raw.pop("select_artifact_by_modality", False)
             catalog_id = raw.get("id")
             is_catalog_reference = bool(
                 catalog_enabled
@@ -100,9 +142,14 @@ def resolve_model_entries(app, evaluation: dict[str, Any], evaluation_path: Path
                         f"evaluation.models[{index}].overrides 不能修改模型身份字段: {changed_identity}; "
                         "请新建一份 model catalog 配置"
                     )
-                row = deep_merge(catalog[str(catalog_id)], overrides)
-                row["id"] = str(catalog_id)
+                base = catalog[str(catalog_id)]
+                if select_artifact:
+                    base = _select_modality_artifact(app, catalog, base, evaluation, index)
+                row = deep_merge(base, overrides)
+                row["id"] = str(base["id"])
             else:
+                if select_artifact:
+                    raise ConfigError("select_artifact_by_modality requires an existing model catalog id")
                 row = raw
             if run_resources is not None:
                 row["_run_resources"] = run_resources

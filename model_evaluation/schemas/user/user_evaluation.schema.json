@@ -151,6 +151,7 @@
       "required": ["id"],
       "properties": {
         "id": {"type": "string", "minLength": 1},
+        "select_artifact_by_modality": {"type": "boolean"},
         "overrides": {"$ref": "#/$defs/modelOverrides"},
         "resources": {"$ref": "#/$defs/modelResources"}
       }

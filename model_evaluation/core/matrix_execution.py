@@ -4,6 +4,7 @@ import copy
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from model_evaluation.core.artifact_modality import ArtifactModalityMismatch
 from model_evaluation.core.config.parsing import load_json_strict
 from model_evaluation.core.errors import (
     ConfigError,
@@ -276,6 +277,9 @@ def _execute_children(
         _write_status(executor, matrix_plan, state)
         try:
             _run_plan(executor, matrix_plan, plan, record)
+        except ArtifactModalityMismatch as exc:
+            record.update(status="not_run", attempts=0, error=dict(exc.details),
+                          finished_at=executor._batch_now(matrix_plan))
         except (KeyboardInterrupt, OrchestrationInterruptedError) as exc:
             _mark_interrupted(
                 executor,

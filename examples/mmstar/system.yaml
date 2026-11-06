@@ -1,0 +1,25 @@
+schema_version: "1.3"
+system: {name: local-multimodal}
+profiles:
+  defaults: {hardware: gpu}
+  environment:
+    inference: {type: current}
+    evaluation: {type: venv, profile: /opt/venvs/evalscope}
+  hardware:
+    gpu:
+      type: nvidia
+      devices: [0]
+      runtime: {type: cuda, root: /usr/local/cuda}
+  backend:
+    vllm:
+      type: vllm
+      environment: inference
+      executable: /usr/local/bin/vllm
+      compatibility: {runtime_families: [cuda]}
+  evaluator:
+    evalscope:
+      type: evalscope
+      environment: evaluation
+      parameters: {executable: evalscope}
+models: {root: /data/models}
+paths: {cache: /var/cache/model-evaluation, results: results}

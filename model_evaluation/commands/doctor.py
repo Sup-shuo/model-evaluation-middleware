@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from model_evaluation.commands.render import render_doctor
+from model_evaluation.core.artifact_modality import modality_skip
 from model_evaluation.core.config.platform import adapter_parameters
 from model_evaluation.core.security import redact_diagnostic
 
@@ -195,6 +196,11 @@ def _doctor_row(app, orchestrator, child: dict, cache_root: str) -> dict:
         "deferred": ["backend service readiness", "service capability compatibility"],
         "warnings": copy.deepcopy(child.get("warnings") or []),
     }
+    skip = modality_skip(child)
+    if skip:
+        row["checks"]["artifact_modality"] = {"status": "skipped", **skip}
+        row["reasons"] = [*row["reasons"], skip["message"]]
+        return row
     evaluator, evaluator_warnings = _evaluator_check(
         app,
         orchestrator,

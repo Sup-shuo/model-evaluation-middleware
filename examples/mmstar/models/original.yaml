@@ -1,0 +1,7 @@
+schema_version: "1.0"
+id: example-vlm
+label: Example vision-language model
+source: {type: local, ref: example/original}
+metadata:
+  artifacts_by_modality:
+    image_text: example-vlm-vision-bf16

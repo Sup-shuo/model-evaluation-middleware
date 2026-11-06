@@ -8,6 +8,8 @@ after a clean Transformers reload and source-equivalence validation.
 
 from __future__ import annotations
 
+from component_retention import component_retention
+
 import argparse
 import copy
 import gc
@@ -594,6 +596,7 @@ def main() -> int:
                 + ("symmetric" if weights.symmetric else "asymmetric")
             ),
             "derived_format": "dense BF16 safetensors",
+            "component_retention": component_retention(source_locations, output_locations),
             "transformers": __import__("transformers").__version__,
             "compressed_tensors": __import__("compressed_tensors").__version__,
             "method": (

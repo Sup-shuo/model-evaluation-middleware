@@ -204,7 +204,13 @@ def build_check_report(
         report["phases"]["doctor"] = {"status": "failed", "error": _error(exc)}
 
     try:
-        resources = _resource_report(plan)
+        skipped_ids = {
+            child["plan_id"] for child, row in zip(plan["plans"], doctor["runs"])
+            if "artifact_modality" in row.get("checks", {})
+        } if report["phases"]["doctor"]["status"] == "ok" else set()
+        resources = _resource_report(dict(plan, plans=[
+            child for child in plan["plans"] if child["plan_id"] not in skipped_ids
+        ]))
         report["phases"]["resources"] = {
             "status": "ok" if resources["ok"] else "failed",
             "details": resources,

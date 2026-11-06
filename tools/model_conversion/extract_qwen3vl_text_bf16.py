@@ -9,6 +9,8 @@ reload, and a short text-only logits comparison have passed.
 
 from __future__ import annotations
 
+from component_retention import component_retention
+
 import argparse
 import builtins
 import gc
@@ -392,6 +394,7 @@ def main() -> int:
                 "source_path_at_conversion": str(source),
                 "source_format": "Qwen3-VL dense BF16 safetensors",
                 "derived_format": "Qwen3 text-only dense BF16 safetensors",
+                "component_retention": component_retention(source_locations, output_locations),
                 "method": (
                     "exact model.language_model -> model key projection; visual tower omitted; "
                     "Qwen3-VL text MRoPE reduced to ordinary Qwen3 RoPE for equal text positions; "

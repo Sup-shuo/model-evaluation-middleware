@@ -8,6 +8,8 @@ only then atomically renamed to the requested final directory.
 
 from __future__ import annotations
 
+from component_retention import component_retention
+
 import argparse
 import copy
 import gc
@@ -22,7 +24,7 @@ from typing import Any
 
 import torch
 from accelerate import init_empty_weights
-from serialization_validation import validate_serialized_state
+from serialization_validation import build_tensor_index, validate_serialized_state
 from transformers import (
     AutoConfig,
     Qwen3_5ForConditionalGeneration,
@@ -399,6 +401,7 @@ def main() -> int:
             "source_path_at_conversion": str(source),
             "source_format": "compressed-tensors mixed-precision NVFP4/FP8",
             "derived_format": "dense BF16 safetensors",
+            "component_retention": component_retention(build_tensor_index(source)[0], build_tensor_index(temporary)[0]),
             "architecture": architecture,
             "transformers": __import__("transformers").__version__,
             "compressed_tensors": __import__("compressed_tensors").__version__,

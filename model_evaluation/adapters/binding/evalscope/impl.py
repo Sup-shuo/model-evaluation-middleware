@@ -114,6 +114,16 @@ def build_task(i, c):
         "evalscope_dataset_args": basis["dataset_args"],
         "dataset_management": "evalscope-native",
     }
+    policy = protocol.get("evalscope_result_validation")
+    if policy is not None:
+        if not isinstance(policy, dict):
+            raise AdapterError("CONFIG_INVALID", "evalscope_result_validation must be an object")
+        policy = dict(policy)
+        params = evaluation.get("parameters") or {}
+        policy["sample_limit"] = (evaluation.get("execution") or {}).get("sample_limit", params.get("limit"))
+        metadata["evalscope_result_validation"] = policy
+    if (benchmark.get("metadata") or {}).get("input_modality") == "image_text":
+        metadata["input_modality"] = "image_text"
     return {
         "schema_version": "1.0",
         "framework": "evalscope",

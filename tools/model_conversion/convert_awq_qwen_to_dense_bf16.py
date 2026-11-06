@@ -8,6 +8,8 @@ Transformers, and only then renamed to the final directory.
 
 from __future__ import annotations
 
+from component_retention import component_retention
+
 import argparse
 import copy
 import gc
@@ -389,6 +391,7 @@ def main() -> int:
                 "source_path_at_conversion": str(source),
                 "source_format": "AWQ GEMM W4A16 group128 zero-point",
                 "derived_format": "dense BF16 safetensors",
+                "component_retention": component_retention(locations, output_locations),
                 "method": (
                     "vLLM AutoAWQ nibble order [0,4,1,5,2,6,3,7] with "
                     "(weight-zero)*scale CPU dequantization, exact Qwen3.5 "

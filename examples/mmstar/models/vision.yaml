@@ -1,0 +1,6 @@
+schema_version: "1.0"
+id: example-vlm-vision-bf16
+label: Example vision-preserving BF16 checkpoint
+source: {type: local, ref: example/vision-bf16}
+metadata:
+  derived_from: {id: example-vlm, ref: example/original}

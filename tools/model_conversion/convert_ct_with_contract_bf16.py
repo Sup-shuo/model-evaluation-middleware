@@ -10,6 +10,8 @@ after a complete second source-equivalence pass.
 
 from __future__ import annotations
 
+from component_retention import component_retention
+
 import argparse
 import builtins
 import gc
@@ -348,6 +350,7 @@ def main() -> int:
                     + ("symmetric" if weights.symmetric else "asymmetric")
                 ),
                 "derived_format": "dense BF16 safetensors",
+                "component_retention": component_retention(locations, output_locations),
                 "method": (
                     "independently verified Qwen3.5 target key/shape contract + global source "
                     "key index + installed compressed-tensors official weight decompressor + "

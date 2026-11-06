@@ -16,6 +16,7 @@ with a production-validated stack.
 | Standard CausalLM | selected Runtime | Transformers native service | configured chat/completions evaluator | Contract + loopback protocol smoke |
 | TinyLLaVA Factory checkpoint | selected Runtime | TinyLLaVA family native service | configured chat evaluator | Contract + loopback protocol smoke |
 | NVIDIA A100 | CUDA | existing vLLM OpenAI-compatible service | EvalScope 1.10.0 | Real one-sample GSM8K smoke E2E |
+| NVIDIA GPU, Cambricon MLU, MetaX GPU | Vendor runtime | Vision-enabled vLLM | EvalScope / MMStar | Full image-and-text evaluations exercised; checkpoint format and available image inputs matter. See [MMStar setup](mmstar.md). |
 | Local service | — | Ollama / llama.cpp | configured evaluator | Contract-tested |
 
 “Real full BBH E2E” means service startup, 24 BBH tasks, 5,761 effective

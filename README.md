@@ -50,7 +50,10 @@ changing Core.
 | Runtime | CPU · CUDA · Neuware · MACA · MUSA · ROCm · CANN · … |
 | Inference Backend | vLLM · Transformers · model-family native service · OpenAI-compatible service · Ollama · llama.cpp · Reference Backend · … |
 | Evaluator | lm-evaluation-harness · EvalScope · Reference Evaluator · … |
-| Dataset / Binding | BBH local · local files · virtual dataset · lm-eval bindings · EvalScope binding · … |
+| Dataset / Binding | BBH local · MMStar (image + text, EvalScope) · local files · virtual dataset · … |
+
+For multimodal evaluation, see [Run MMStar](docs/mmstar.md) for the model,
+service, and evaluator settings.
 | Model material | Hugging Face/local Safetensors · BF16/FP16 · quantized checkpoints · text/VL · derived artifacts · … |
 
 Built-in means the Adapter and its contract are present. It does not by itself

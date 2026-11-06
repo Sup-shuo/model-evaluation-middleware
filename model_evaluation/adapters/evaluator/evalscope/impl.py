@@ -7,6 +7,13 @@ from urllib.parse import urlsplit, urlunsplit
 from model_evaluation.sdk.jsonutil import loads as json_loads
 from model_evaluation.sdk.manifest import load_manifest
 from model_evaluation.sdk.runtime import AdapterError
+from model_evaluation.sdk.openai_image import require_chat_image
+if __package__:
+    from .predictions import validate_predictions
+    from .completeness import validate_completeness
+else:  # invoke.py imports impl as a standalone sibling.
+    from predictions import validate_predictions
+    from completeness import validate_completeness
 
 
 def requirements(i, c):
@@ -138,6 +145,9 @@ def plan_evaluate(i, c):
     task_id = str(task.get("task_id") or "")
     if not task_id:
         raise AdapterError("CONFIG_INVALID", "EvalScope task_id is missing")
+
+    if (task.get("metadata") or {}).get("input_modality") == "image_text":
+        require_chat_image(api_root + "/chat/completions", model_id)
 
     output = Path(i["output_root"]).resolve()
     executable = str(params.get("executable") or "evalscope")
@@ -342,9 +352,12 @@ def _sample_artifacts(root: Path) -> list[dict]:
 def normalize(i, c):
     root = Path(i["raw_result_root"]).resolve()
     task = i["task"]
+    if (task.get("metadata") or {}).get("evalscope_result_validation") is None:
+        validate_predictions(root)
     task_id = str(task["task_id"])
     report_path, report = _find_report(root, task_id)
     rows, detail_rows = _report_rows(report)
+    validate_completeness(root, task, rows, detail_rows)
     native_occurrences: dict[str, list[dict]] = {}
     tasks = {}
     for row in rows:

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 4.1.0-rc5
+
+- Added the MMStar image-and-text benchmark through the EvalScope binding,
+  including an image request before evaluation.
+- Added explicit, modality-aware checkpoint selection and validation of MMStar
+  sample artifacts before publishing a score.
+- Manual Qwen conversion records vision and MTP retention separately so
+  operators can distinguish a multimodal checkpoint from a text extraction.
+
 - Added Moore Threads S5000 Device and MUSA Runtime adapters, reusing the vLLM
   Backend and existing evaluator contracts.
 - Reconstructed CANN library, Python, OPP/tiling, and tool paths for managed

@@ -1,0 +1,25 @@
+schema_version: "1.0"
+id: mmstar
+dataset:
+  provider: virtual
+  revision: evalscope-MMStar-val
+protocol:
+  task: mm_star
+  split: val
+  fewshot: 0
+  inference: [generation]
+  evalscope_result_validation:
+    require_images: true
+    subset_counts:
+      coarse perception: 250
+      fine-grained perception: 250
+      instance reasoning: 250
+      logical reasoning: 250
+      math: 250
+      science & technology: 250
+metrics: [accuracy]
+bindings:
+  evalscope: evalscope
+metadata:
+  dataset_management: EvalScope resolves and caches the benchmark dataset.
+  input_modality: image_text

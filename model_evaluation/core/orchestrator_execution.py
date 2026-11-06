@@ -3,6 +3,8 @@ from __future__ import annotations
 import copy
 from pathlib import Path
 
+from model_evaluation.core.artifact_modality import ArtifactModalityMismatch, modality_skip
+
 from model_evaluation.core.errors import (
     CompatibilityError,
     ModelEvalError,
@@ -133,6 +135,9 @@ def _execute_allocated_run(
 
 def execute_plan(orchestrator, plan: dict) -> Path:
     validate_execution_plan(plan, orchestrator.schemas)
+    reason = modality_skip(plan)
+    if reason:
+        raise ArtifactModalityMismatch(reason["message"], details=reason)
     _reject_incompatible_plan(plan)
     non_global_claims = [
         claim for claim in plan["resources"] if claim["kind"] != "run_lock"

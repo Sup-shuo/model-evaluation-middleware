@@ -46,7 +46,9 @@ eval-manager demo --render-summary
 | Runtime | CPU · CUDA · Neuware · MACA · MUSA · ROCm · CANN · … |
 | 推理 Backend | vLLM · Transformers · 模型家族 Native Service · OpenAI-compatible service · Ollama · llama.cpp · Reference Backend · … |
 | Evaluator | lm-evaluation-harness · EvalScope · Reference Evaluator · … |
-| Dataset / Binding | BBH local · local files · virtual dataset · lm-eval bindings · EvalScope binding · … |
+| Dataset / Binding | 本地 BBH · MMStar（图文，EvalScope）· 本地文件 · 虚拟数据集 · … |
+
+图文评测请参阅 [MMStar 配置与运行](mmstar.md#中文速查)。
 | 模型物料 | Hugging Face/本地 Safetensors · BF16/FP16 · 量化模型 · Text/VL · 派生物料 · … |
 
 “内置”只说明 Adapter 与协议已经存在，不代表所有组合都完成了实机验证。

@@ -60,6 +60,8 @@ def _render_completion(payload: dict) -> str:
     ]
     for row in payload["runs"]:
         run_dir = row.get("run_dir")
+        if (row.get("error") or {}).get("code") == "ARTIFACT_MODALITY_MISMATCH":
+            lines.append(f"  [not_run] {row['model_id']}: {row['error']['message']}")
         if run_dir:
             lines.append(f"  [{row.get('status', 'unknown')}] {run_dir}")
     for report in payload["rendered_reports"]:
